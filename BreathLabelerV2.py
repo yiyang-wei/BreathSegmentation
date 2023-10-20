@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+import matplotlib.patches as patches
 from enum import Enum
 import os
 
@@ -178,6 +179,8 @@ class LabelerUI:
         # Create the axes for the subplots
         self.sub_axes = np.empty((rows, cols, 2), dtype=object)
 
+        self.info = np.empty((rows, cols), dtype=object)
+
         self.span = None
         self.mask = None
         self.annotation = None
@@ -244,6 +247,16 @@ class LabelerUI:
                 self.update(page_index * self.total)
             else:
                 pass
+        elif event.button == 3:
+            if ax_clicked is not self.top_ax:
+                pos = np.where(self.sub_axes == ax_clicked)
+                r, c = pos[0][0], pos[1][0]
+                ax1, ax2 = self.sub_axes[r, c]
+                mask = patches.Rectangle((0, 0), 1, 2, transform=ax2.transAxes, color='grey', alpha=0.75, clip_on=False)
+                ax2.add_patch(mask)
+                self.annotation = ax2.annotate(self.info[r, c], xy=(0.5, 1), fontsize=12,
+                                          ha='center', va='center', xycoords='axes fraction', color='white')
+                self.fig.canvas.draw()
     def update(self, breath_index):
 
         # Create the top plot for the whole time series
@@ -255,25 +268,24 @@ class LabelerUI:
         for r in range(self.rows):
             for c in range(self.cols):
                 i = r * self.cols + c
-                if breath_index + i >= self.breath_data.n_breaths:
-                    break
-                part_timestamp, part_pressure, part_flow = self.breath_data.get_breath_data(breath_index + i)
                 ax1, ax2 = self.sub_axes[r, c, :]
 
                 # Clear the axes
                 ax1.clear()
                 ax2.clear()
 
+                if breath_index + i >= self.breath_data.n_breaths:
+                    continue
+
+                part_timestamp, part_pressure, part_flow = self.breath_data.get_breath_data(breath_index + i)
+
                 # Create ax1 for pressure and ax2 for flow
                 ax1.plot(part_timestamp, part_pressure, '.-', color='C1', alpha=0.5)
                 ax2.plot(part_timestamp, part_flow, '.-', color='C0', alpha=0.5)
 
                 # Calculate and display the in_vol and ex_vol on the plot
-                # in_vol, ex_vol = self.breath_data.get_volume(breath_index + i)
-                # ax2.text(0.05, 0.1, f"In: {in_vol:.2f}", transform=ax2.transAxes, color="forestgreen",
-                #          bbox=dict(facecolor='ghostwhite', edgecolor='silver', boxstyle='round', alpha=0.5, pad=0.2))
-                # ax2.text(0.65, 0.1, f"Ex: {ex_vol:.2f}", transform=ax2.transAxes, color="orangered",
-                #          bbox=dict(facecolor='ghostwhite', edgecolor='silver', boxstyle='round', alpha=0.5, pad=0.2))
+                in_vol, ex_vol = self.breath_data.get_volume(breath_index + i)
+                self.info[r, c] = f"In: {in_vol:.2f}\nEx {ex_vol:.2f}"
 
                 # Calculate the margins for pressure and flow based on their respective ranges
                 margin_factor = 0.15
