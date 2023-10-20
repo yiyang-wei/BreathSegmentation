@@ -22,8 +22,8 @@ import matplotlib
 matplotlib.use('TkAgg')
 
 # do not include slash at the end
-READ_FOLDER = "data"
-SAVE_FOLDER = "breathlabels"
+READ_FOLDER = "../ventilator converted files"
+SAVE_FOLDER = "../ventilator breathlabels"
 IN_FILE_NAME = "20190616_EVLP551_converted.csv"
 OUT_FILE_NAME = IN_FILE_NAME[:-13] + "labeled.csv"
 
@@ -43,6 +43,7 @@ class BreathLabel(Enum):
         obj.color = color
         return obj
 
+    Unvisited = (0, "black")
     Normal = (1, "black")
     Assessment = (2, "green")
     Bronch = (3, "blue")
@@ -56,12 +57,14 @@ class BreathLabel(Enum):
 N_LABELS = len(BreathLabel)
 
 
-def quick_filter(duration):
+def quick_filter(duration, in_vol, ex_vol):
     """Quickly filter the breaths based on their duration."""
     if duration < 4 or duration > 10:
         return BreathLabel.Noise.value
     elif duration < 7:
         return BreathLabel.Assessment.value
+    elif abs(in_vol + ex_vol) > 0.1 * abs(in_vol - ex_vol):
+        return BreathLabel.Bronch.value
     else:
         return BreathLabel.Normal.value
 
@@ -116,7 +119,7 @@ class BreathLoader:
 
 class LabelRecorder:
 
-    def __init__(self, out_file_path):
+    def __init__(self, out_file_path, breath_data):
         """Create a file if not exist or read the labels if exists."""
         self.out_file_path = out_file_path
         try:
@@ -131,8 +134,8 @@ class LabelRecorder:
                 # convert the label names to label values
                 self.breath_labels = self.to_values(label_names)
             else:
-                self.df = None
-                self.breath_labels = None
+                self.breath_labels = np.zeros(breath_data.n_breaths, dtype=np.int8)
+                self.df = pd.DataFrame()
         except Exception as e:
             print(f"Error preparing save directory: {e}")
             exit()
@@ -157,8 +160,9 @@ class LabelRecorder:
 
 class LabelerUI:
 
-    def __init__(self, breath_data, rows, cols, width, height):
+    def __init__(self, breath_data, breath_recorder, rows, cols, width, height):
         self.breath_data = breath_data
+        self.breath_recorder = breath_recorder
         self.rows = rows
         self.cols = cols
         self.total = rows * cols
@@ -169,6 +173,25 @@ class LabelerUI:
                                             wspace=0.25, hspace=0.5,
                                             left=0.05, right=0.95, bottom=0.05, top=0.95)
 
+        self.top_ax = None
+        self.init_top_ax()
+
+        # Create the axes for the subplots
+        self.sub_axes = np.empty((rows, cols, 2), dtype=object)
+        self.init_sub_axes()
+
+        self.info = np.empty((rows, cols), dtype=object)
+
+        self.start_breath_index = 0
+
+        self.span = None
+        self.mask = np.empty((rows, cols), dtype=object)
+        self.annotation = np.empty((rows, cols), dtype=object)
+
+        # Temp walk around
+        self.offset = 1
+
+    def init_top_ax(self):
         # Add the top plot that spans the entire row
         self.top_ax = plt.subplot(self.outer_grid[0, :])
         self.top_ax.plot(self.breath_data.timestamp, self.breath_data.flow, linewidth=0.5)
@@ -176,20 +199,9 @@ class LabelerUI:
         self.top_ax.tick_params(axis='y', colors='C0', rotation=90)
         self.top_ax.set_title('Entire Flow')
 
-        # Create the axes for the subplots
-        self.sub_axes = np.empty((rows, cols, 2), dtype=object)
-
-        self.info = np.empty((rows, cols), dtype=object)
-
-        self.span = None
-        self.mask = None
-        self.annotation = None
-
-        # Temp walk around
-        self.offset = 1
-
-        for r in range(rows):
-            for c in range(cols):
+    def init_sub_axes(self):
+        for r in range(self.rows):
+            for c in range(self.cols):
                 inner_grid = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=self.outer_grid[r + 1, c],
                                                               wspace=0.1, hspace=0.0)
 
@@ -216,20 +228,46 @@ class LabelerUI:
                 # Store axes for later
                 self.sub_axes[r, c, :] = ax1, ax2
 
-    def update_plot(self, axes, label, idx):
+    def get_breath_index(self, i):
+        return self.start_breath_index + i
+
+    def get_breath_number(self, i):
+        return self.offset + self.get_breath_index(i)
+
+    def get_breath_label(self, i):
+        return self.breath_recorder.breath_labels[self.get_breath_index(i)]
+
+    def set_breath_label(self, i, label):
+        self.breath_recorder.breath_labels[self.get_breath_index(i)] = label
+
+    def get_axes(self, i):
+        return self.sub_axes[i // self.cols, i % self.cols, :]
+
+    def find_rc(self, ax):
+        if ax is None or ax is self.top_ax:
+            return None, None
+        pos = np.where(self.sub_axes == ax)
+        r, c = pos[0][0], pos[1][0]
+        return r, c
+
+    def mark_subplot(self, i):
         """Update the plot of the i-th breath."""
-        if label == 0:
-            axes[0].set_title(f"Breath {idx}")
+        ax1, ax2 = self.get_axes(i)
+        label = self.get_breath_label(i)
+        if label <= 1:
+            ax1.set_title(f"Breath {self.get_breath_number(i)}")
         else:
-            axes[0].set_title(f"Breath {idx} ({self.labels[label]['label']})")
-        axes[0].title.set_color(self.labels[label]['color'])
-        for ax in axes:
-            for spine in ax.spines.values():
-                spine.set_edgecolor(self.labels[label]['color'])
-                if label == 0:
-                    spine.set_linewidth(0.5)
-                else:
-                    spine.set_linewidth(4)
+            ax1.set_title(f"Breath {self.get_breath_number(i)} ({BreathLabel(label).name})")
+        ax1.title.set_color(BreathLabel(label).color)
+        spines = list(ax1.spines.values()) + list(ax2.spines.values())
+        spines.pop(7)
+        spines.pop(2)
+        for spine in spines:
+            spine.set_edgecolor(BreathLabel(label).color)
+            if label <= 1:
+                spine.set_linewidth(1)
+            else:
+                spine.set_linewidth(4)
 
     def on_click(self, event):
         """Handle the click event."""
@@ -246,21 +284,37 @@ class LabelerUI:
                 # update the plot
                 self.update(page_index * self.total)
             else:
-                pass
+                r, c = self.find_rc(ax_clicked)
+                if r is None or c is None:
+                    return
+                i = r * self.cols + c
+                ax1, ax2 = self.sub_axes[r, c, :]
+                label = self.get_breath_label(i)
+                self.set_breath_label(i, (label + 1) % N_LABELS)
+                self.mark_subplot(i)
+                self.fig.canvas.draw()
         elif event.button == 3:
             if ax_clicked is not self.top_ax:
-                pos = np.where(self.sub_axes == ax_clicked)
-                r, c = pos[0][0], pos[1][0]
-                ax1, ax2 = self.sub_axes[r, c]
-                mask = patches.Rectangle((0, 0), 1, 2, transform=ax2.transAxes, color='grey', alpha=0.75, clip_on=False)
-                ax2.add_patch(mask)
-                self.annotation = ax2.annotate(self.info[r, c], xy=(0.5, 1), fontsize=12,
-                                          ha='center', va='center', xycoords='axes fraction', color='white')
+                r, c = self.find_rc(ax_clicked)
+                if r is None or c is None:
+                    return
+                if self.mask[r, c] is not None:
+                    self.mask[r, c].remove()
+                    self.mask[r, c] = None
+                    self.annotation[r, c].remove()
+                    self.annotation[r, c] = None
+                else:
+                    ax1, ax2 = self.sub_axes[r, c, :]
+                    self.mask[r, c] = patches.Rectangle((0, 0), 1, 2, transform=ax2.transAxes, color='grey', alpha=0.75, clip_on=False)
+                    ax2.add_patch(self.mask[r,c])
+                    self.annotation[r, c] = ax2.annotate(self.info[r, c], xy=(0.5, 1), fontsize=12,
+                                              ha='center', va='center', xycoords='axes fraction', color='white')
                 self.fig.canvas.draw()
-    def update(self, breath_index):
+    def update(self, start_breath_index):
+        self.start_breath_index = start_breath_index
 
         # Create the top plot for the whole time series
-        window_start, window_end = self.breath_data.get_breath_boundry(breath_index, breath_index + self.total - 1)
+        window_start, window_end = self.breath_data.get_breath_boundry(start_breath_index, start_breath_index + self.total - 1)
         if self.span is not None:
             self.span.remove()
         self.span = self.top_ax.axvspan(self.breath_data.timestamp[window_start], self.breath_data.timestamp[window_end], alpha=0.2, color='grey')
@@ -274,17 +328,22 @@ class LabelerUI:
                 ax1.clear()
                 ax2.clear()
 
-                if breath_index + i >= self.breath_data.n_breaths:
+                if start_breath_index + i >= self.breath_data.n_breaths:
                     continue
 
-                part_timestamp, part_pressure, part_flow = self.breath_data.get_breath_data(breath_index + i)
+                part_timestamp, part_pressure, part_flow = self.breath_data.get_breath_data(start_breath_index + i)
 
                 # Create ax1 for pressure and ax2 for flow
                 ax1.plot(part_timestamp, part_pressure, '.-', color='C1', alpha=0.5)
                 ax2.plot(part_timestamp, part_flow, '.-', color='C0', alpha=0.5)
 
                 # Calculate and display the in_vol and ex_vol on the plot
-                in_vol, ex_vol = self.breath_data.get_volume(breath_index + i)
+                in_vol, ex_vol = self.breath_data.get_volume(start_breath_index + i)
+                ax2.text(0.02, 0.12, f"In: {in_vol:.2f}", transform=ax2.transAxes, color="forestgreen",
+                         bbox=dict(facecolor='ghostwhite', edgecolor='silver', boxstyle='round', alpha=0.5, pad=0.2))
+                ax2.text(0.65, 0.12, f"Ex: {ex_vol:.2f}", transform=ax2.transAxes, color="orangered",
+                         bbox=dict(facecolor='ghostwhite', edgecolor='silver', boxstyle='round', alpha=0.5, pad=0.2))
+
                 self.info[r, c] = f"In: {in_vol:.2f}\nEx {ex_vol:.2f}"
 
                 # Calculate the margins for pressure and flow based on their respective ranges
@@ -306,12 +365,13 @@ class LabelerUI:
                 ax2.set_yticks([np.min(part_flow), np.max(part_flow)])
 
                 # set the title of each plot to the index of the breath
-                ax1.set_title(f"Breath {self.offset + breath_index + i}")
+                ax1.set_title(f"Breath {self.offset + start_breath_index + i}")
 
                 # setup plot border color and width
                 self.sub_axes[r, c, :] = ax1, ax2
-                # self.update_plot(self.subplot_axes[i], self.breath_labels[self.breath_index + i],
-                #                  self.offset + breath_index + i)
+                if self.get_breath_label(i) == 0:
+                    self.set_breath_label(i, quick_filter(duration, in_vol, ex_vol))
+                self.mark_subplot(i)
 
         # Connect event handlers
         self.fig.canvas.mpl_connect('button_press_event', self.on_click)
@@ -323,5 +383,6 @@ class LabelerUI:
 
 
 breath_loader = BreathLoader(READ_PATH)
-ui = LabelerUI(breath_loader, ROWS, COLS, WIDTH, HEIGHT)
+breath_recorder = LabelRecorder(SAVE_PATH, breath_loader)
+ui = LabelerUI(breath_loader, breath_recorder, ROWS, COLS, WIDTH, HEIGHT)
 ui.update(0)
