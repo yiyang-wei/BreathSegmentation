@@ -2,7 +2,7 @@
 
 READ_FOLDER = "data"
 SAVE_FOLDER = "breathlabels"
-FILE_NAME = "20220418_EVLP818_converted.csv"
+FILE_NAME = "20190616_EVLP551_converted.csv"
 
 ROWS = 4
 COLS = 5
@@ -22,7 +22,7 @@ LABELS = {0: {"label": "Normal", "color": "black"},
 def quick_filter(duration):
     """Quickly filter the breaths based on their duration."""
     if duration < 4 or duration > 10:
-        return 3
+        return 7
     elif duration < 7:
         return 1
     else:
@@ -56,8 +56,8 @@ class BreathLoader:
             self.phase = breath['B_phase'].to_numpy()
             # segment each breath
             diff_phase = np.diff(self.phase)
-            self.boundary = np.where(diff_phase == 1)[0]
-            self.switch = np.where(diff_phase == -1)[0]
+            self.boundary = np.where(diff_phase == 1)[0] + 1
+            self.switch = np.where(diff_phase == -1)[0] + 1
             self.n_breaths = self.boundary.shape[0] - 1
         except Exception as e:
             print(f"Error reading file: {e}")
@@ -181,6 +181,8 @@ class BreathLabeler:
         top_ax.set_title("Flow")
 
         for i in range(self.total):
+            if self.breath_index + i >= self.breath_data.n_breaths:
+                break
             part_timestamp, part_pressure, part_flow = self.breath_data.get_breath_data(self.breath_index + i)
 
             # Create ax1 for pressure
@@ -226,8 +228,6 @@ class BreathLabeler:
             # setup plot border color and width
             self.subplot_axes[i] = ax1, ax2
             self.update_plot(self.subplot_axes[i], self.breath_labels[self.breath_index + i], self.offset + self.breath_index + i)
-            if self.breath_index + i >= self.breath_data.n_breaths - 1:
-                break
 
         # Connect event handlers
         self.fig.canvas.mpl_connect('button_press_event', self.on_click)
@@ -237,6 +237,8 @@ class BreathLabeler:
         plt.get_current_fig_manager().window.wm_geometry("+0+0")
         plt.show()
         for i in range(self.total):
+            if self.breath_index + i >= self.breath_data.n_breaths:
+                break
             if self.breath_labels[self.breath_index + i] != 0:
                 print(f"Breath {self.offset + self.breath_index + i} is labeled as {self.labels[self.breath_labels[self.breath_index + i]]['label']}")
         if self.prev:
