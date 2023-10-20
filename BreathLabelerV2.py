@@ -170,11 +170,17 @@ class LabelerUI:
 
         # Add the top plot that spans the entire row
         self.top_ax = plt.subplot(self.outer_grid[0, :])
+        self.top_ax.plot(self.breath_data.timestamp, self.breath_data.flow, linewidth=0.5)
+        self.top_ax.set_yticks([np.min(self.breath_data.flow), np.max(self.breath_data.flow)])
         self.top_ax.tick_params(axis='y', colors='C0', rotation=90)
         self.top_ax.set_title('Entire Flow')
 
         # Create the axes for the subplots
         self.sub_axes = np.empty((rows, cols, 2), dtype=object)
+
+        self.span = None
+        self.mask = None
+        self.annotation = None
 
         # Temp walk around
         self.offset = 1
@@ -207,13 +213,44 @@ class LabelerUI:
                 # Store axes for later
                 self.sub_axes[r, c, :] = ax1, ax2
 
+    def update_plot(self, axes, label, idx):
+        """Update the plot of the i-th breath."""
+        if label == 0:
+            axes[0].set_title(f"Breath {idx}")
+        else:
+            axes[0].set_title(f"Breath {idx} ({self.labels[label]['label']})")
+        axes[0].title.set_color(self.labels[label]['color'])
+        for ax in axes:
+            for spine in ax.spines.values():
+                spine.set_edgecolor(self.labels[label]['color'])
+                if label == 0:
+                    spine.set_linewidth(0.5)
+                else:
+                    spine.set_linewidth(4)
+
+    def on_click(self, event):
+        """Handle the click event."""
+        ax_clicked = event.inaxes
+        if event.button == 1:
+            if ax_clicked == self.top_ax:
+                xdata = event.xdata
+                # find the index of the clicked point
+                clicked_index = np.searchsorted(self.breath_data.timestamp, xdata, side='left')
+                # find the index of the breath that contains the clicked point
+                breath_index = np.searchsorted(self.breath_data.boundary, clicked_index, side='right') - 1
+                # get the page start index of the breath
+                page_index = breath_index // self.total
+                # update the plot
+                self.update(page_index * self.total)
+            else:
+                pass
     def update(self, breath_index):
 
         # Create the top plot for the whole time series
-        self.top_ax.plot(self.breath_data.timestamp, self.breath_data.flow, linewidth=0.5)
-        self.top_ax.set_yticks([np.min(self.breath_data.flow), np.max(self.breath_data.flow)])
         window_start, window_end = self.breath_data.get_breath_boundry(breath_index, breath_index + self.total - 1)
-        self.top_ax.axvspan(self.breath_data.timestamp[window_start], self.breath_data.timestamp[window_end], alpha=0.2, color='grey')
+        if self.span is not None:
+            self.span.remove()
+        self.span = self.top_ax.axvspan(self.breath_data.timestamp[window_start], self.breath_data.timestamp[window_end], alpha=0.2, color='grey')
 
         for r in range(self.rows):
             for c in range(self.cols):
@@ -238,15 +275,13 @@ class LabelerUI:
                 # ax2.text(0.65, 0.1, f"Ex: {ex_vol:.2f}", transform=ax2.transAxes, color="orangered",
                 #          bbox=dict(facecolor='ghostwhite', edgecolor='silver', boxstyle='round', alpha=0.5, pad=0.2))
 
-                # # Calculate the margins for pressure and flow based on their respective ranges
-                # margin_factor = 0.15
-                # pressure_margin = margin_factor * (part_pressure.max() - part_pressure.min())
-                # flow_margin = margin_factor * (part_flow.max() - part_flow.min())
-                #
-                # # Adjust y-limits with margins for both top and bottom of the plots
-                # ax1.set_ylim(2 * part_pressure.min() - part_pressure.max() - 2 * pressure_margin,
-                #              part_pressure.max() + pressure_margin)
-                # ax2.set_ylim(part_flow.min() - flow_margin, 2 * part_flow.max() - part_flow.min() + 2 * flow_margin)
+                # Calculate the margins for pressure and flow based on their respective ranges
+                margin_factor = 0.15
+                pressure_margin = margin_factor * (part_pressure.max() - part_pressure.min())
+                flow_margin = margin_factor * (part_flow.max() - part_flow.min())
+                # Adjust y-limits with margins for both top and bottom of the plots
+                ax1.set_ylim(part_pressure.min() -  pressure_margin, part_pressure.max() + pressure_margin)
+                ax2.set_ylim(part_flow.min() - flow_margin, part_flow.max() + flow_margin)
 
                 # don't show x ticks, show timestamp difference as label
                 duration = (part_timestamp[-1] - part_timestamp[0]) / 10000
@@ -267,7 +302,7 @@ class LabelerUI:
                 #                  self.offset + breath_index + i)
 
         # Connect event handlers
-        # self.fig.canvas.mpl_connect('button_press_event', self.on_click)
+        self.fig.canvas.mpl_connect('button_press_event', self.on_click)
         # self.fig.canvas.mpl_connect('key_press_event', self.on_key)
 
         # Show the plot in the top left corner of the screen
