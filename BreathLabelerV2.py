@@ -10,18 +10,23 @@ To label the breaths:
 1. Left click on subplots to switch between breath types.
 2. Right click on subplots to show/hide the breath parameters.
 3. Press SPACE to show/hide the breath parameters for all subplots.
-4. Press 1-8 to label the masked breaths.
-5. Press BACKSPACE to clear all masks.
+4. Press 1-8 to label the masked breaths (can be configured).
+5. Press BACKSPACE to clear all masks and labels.
 
 To navigate between pages:
 1. Press ENTER or RIGHT to go to the next page.
 2. Press LEFT to go to the previous page.
-3. Click on the top plot to go to the page that contains the clicked point.
+3. Click on the top plot to go to the clicked page.
 
 To save and exit:
 1. Each page will be saved automatically when the user navigates to another page.
 2. Press ESC to save the current page and exit the program.
 3. Close the window to exit the program without saving the current page.
+
+Configuration:
+1. To update breath types, add a new enum value to BreathLabel (0 and 1 are reserved for Unvisited and Normal).
+2. To update the quick filter logic, update the quick_filter function.
+3. Other configurations see comments below.
 
 Tips:
 1. The program will automatically label the breaths based on a quick filter.
@@ -76,24 +81,32 @@ OFFSET = 1
 
 
 class BreathLabel(Enum):
-    def __new__(cls, value, color):
+    def __new__(cls, value, color, shortcuts):
         obj = object.__new__(cls)
         obj._value_ = value
         obj.color = color
+        obj.shortcuts = shortcuts
         return obj
 
-    Unvisited = (0, "black")
-    Normal = (1, "black")
-    Assessment = (2, "green")
-    Bronch = (3, "blue")
-    Deflation = (4, "violet")
-    Question = (5, "orange")
-    InPause = (6, "gold")
-    ExPause = (7, "indigo")
-    Noise = (8, "red")
+    Unvisited = (0, "black", None)
+    Normal = (1, "black", ["0", "1"])
+    Assessment = (2, "green", ["2"])
+    Bronch = (3, "blue", ["3"])
+    Deflation = (4, "violet", ["4"])
+    Question = (5, "orange", ["5"])
+    InPause = (6, "gold", ["6"])
+    ExPause = (7, "indigo", ["7"])
+    Noise = (8, "red", ["8", "9"])
 
 
 N_LABELS = len(BreathLabel)
+SHORTCUTS = []
+SHORTCUT_DICT = {}
+for label in BreathLabel:
+    if label.shortcuts is not None:
+        SHORTCUTS += label.shortcuts
+        for shortcut in label.shortcuts:
+            SHORTCUT_DICT[shortcut] = label.value
 
 
 def quick_filter(duration, vol_ratio, PEEP):
@@ -200,7 +213,7 @@ class ParamTable:
             # read the labels from the csv file if exists or create a new one
             if os.path.exists(out_file_path):
                 print(f"Past record exists, reading params from {out_file_path}")
-                self.df = pd.read_csv(out_file_path, header=0, sep=',')
+                self.df = pd.read_csv(out_file_path, index_col=0, header=0, sep=',')
                 label_names = self.df["Label"]
                 # convert the label names to label values
                 self.breath_labels = self.to_values(label_names)
@@ -283,7 +296,7 @@ class ParamTable:
         try:
             # save the df to a csv file
             print(f"Saving params to {self.out_file_path}")
-            self.df.to_csv(self.out_file_path, index=False)
+            self.df.to_csv(self.out_file_path, index=True, header=True, sep=',')
         except Exception as e:
             print(f"Error saving file: {e}")
 
@@ -558,11 +571,11 @@ class BreathLabeler:
             self.update(self.page + 1)
         elif event.key == 'left':
             self.update(self.page - 1)
-        elif event.key in '12345678':
+        elif event.key in SHORTCUTS:
             for r in range(self.rows):
                 for c in range(self.cols):
                     if self.in_range(r, c) and self.ui.masked(r, c):
-                        self.ui.set_breath_label(r, c, int(event.key))
+                        self.ui.set_breath_label(r, c, SHORTCUT_DICT[event.key])
             self.ui.fig.canvas.draw()
         elif event.key == 'escape':
             self.save()
