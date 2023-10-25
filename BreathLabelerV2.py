@@ -1,3 +1,35 @@
+"""
+Introduction:
+This program is used to help label the breaths types from the ventilator data.
+The program will read the ventilator data from a CSV file and segment each breath.
+The user can then label each breath as one of the following types in configuration.
+The program will save the labels as well as the breath parameters to a CSV file.
+The program will also save the progress so that the user can continue from where they left off.
+
+To label the breaths:
+1. Left click on subplots to switch between breath types.
+2. Right click on subplots to show/hide the breath parameters.
+3. Press SPACE to show/hide the breath parameters for all subplots.
+4. Press 1-8 to label the masked breaths.
+5. Press BACKSPACE to clear all masks.
+
+To navigate between pages:
+1. Press ENTER or RIGHT to go to the next page.
+2. Press LEFT to go to the previous page.
+3. Click on the top plot to go to the page that contains the clicked point.
+
+To save and exit:
+1. Each page will be saved automatically when the user navigates to another page.
+2. Press ESC to save the current page and exit the program.
+3. Close the window to exit the program without saving the current page.
+
+Tips:
+1. The program will automatically label the breaths based on a quick filter.
+2. The program will start from the first unvisited breath.
+3. The program will not automatically exit after the last page, press ESC to exit.
+4. Remember to check the configurations before running the program.
+"""
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -11,6 +43,12 @@ import time
 import matplotlib
 
 matplotlib.use('TkAgg')
+
+"""
+========================================================================================================================
+Configurations begin here
+========================================================================================================================
+"""
 
 # do not include slash at the end
 READ_FOLDER = "data"
@@ -71,6 +109,12 @@ def quick_filter(duration, vol_ratio, PEEP):
     else:
         return BreathLabel.Normal.value
 
+
+"""
+========================================================================================================================
+Main program begins here
+========================================================================================================================
+"""
 
 READ_PATH = os.path.join(READ_FOLDER, IN_FILE_NAME)
 SAVE_PATH = os.path.join(SAVE_FOLDER, OUT_FILE_NAME)
@@ -391,12 +435,11 @@ class LabelerUI:
 
     def to_info(self, params):
         """Convert the params to info."""
-        return f"""\
-max_gap: {params['Max_gap(ms)'] / 10:.2f}ms
-ie_dur_ratio: {params['IE_duration_ratio']:.2f}
-ie_vol_ratio: {params['IE_vol_ratio']:.2f}
-PEEP: {params['PEEP']:.2f}
-Dy_comp: {params['Dy_comp']:.2f}"""
+        return f"max_gap: {params['Max_gap(ms)'] / 10:.2f}ms\n" + \
+               f"ie_dur_ratio: {params['IE_duration_ratio']:.2f}\n" + \
+               f"ie_vol_ratio: {params['IE_vol_ratio']:.2f}\n" + \
+               f"PEEP: {params['PEEP']:.2f}\n" + \
+               f"Dy_comp: {params['Dy_comp']:.2f}"
 
     def update_subplot(self, r, c, part_data, params, label):
         """Update the plot of the breath at the given position."""
@@ -561,6 +604,7 @@ class BreathLabeler:
         print(f"Saving page {self.page + 1}/{self.total_pages}")
         self.param_table.set_labels(self.page * self.per_page, self.ui.breath_labels)
         self.param_table.save()
+
 
 breath_data = BreathLoader(READ_PATH)
 param_table = ParamTable(SAVE_PATH, breath_data)
