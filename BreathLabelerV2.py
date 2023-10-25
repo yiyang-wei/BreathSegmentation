@@ -405,6 +405,14 @@ class LabelerUI:
             return True
         return False
 
+    def clear_mark(self, r, c):
+        ax1, ax2 = self.sub_axes[r, c, :]
+        ax1.title.set_color(BreathLabel.Normal.color)
+        spines = list(ax1.spines.values()) + list(ax2.spines.values())
+        for spine in spines:
+            spine.set_edgecolor(BreathLabel.Normal.color)
+            spine.set_linewidth(1)
+
     def clear_subplot(self, r, c):
         ax1, ax2 = self.sub_axes[r, c, :]
         ax1.clear()
@@ -550,8 +558,7 @@ class BreathLabeler:
                 if page_index >= self.total_pages:
                     return
                 else:
-                    self.page = page_index
-                    self.update(self.page)
+                    self.update(page_index)
                     self.ui.fig.canvas.draw()
             else:
                 r, c = self.ui.find_ax(ax_clicked)
@@ -616,6 +623,8 @@ class BreathLabeler:
                     if label == BreathLabel.Unvisited.value:
                         label = quick_filter(params["Duration(s)"], params["IE_vol_ratio"], params["PEEP"])
                     self.ui.update_subplot(r, c, part_data, params, label)
+                else:
+                    self.ui.clear_mark(r, c)
         # Connect event handlers
         self.ui.fig.canvas.mpl_connect('button_press_event', self.on_click)
         self.ui.fig.canvas.mpl_connect('key_press_event', self.on_key)
