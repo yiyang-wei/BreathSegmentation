@@ -32,7 +32,8 @@ Tips:
 1. The program will automatically label the breaths based on a quick filter.
 2. The program will start from the first unvisited breath.
 3. The program will not automatically exit after the last page, press ESC to exit.
-4. Remember to check the configurations before running the program.
+4. The window title will show the current file name and whether all breaths have been visited.
+5. Remember to check the configurations before running the program.
 """
 
 import numpy as np
@@ -141,6 +142,7 @@ class BreathLoader:
 
     def __init__(self, in_file_path):
         """Read data from a CSV file and segment each breath."""
+        self.in_file_path = in_file_path
         try:
             print(f"Reading data from {in_file_path}")
             breath = pd.read_csv(in_file_path, header=0, usecols=["Timestamp", "Pressure", "Flow", "B_phase"])
@@ -233,7 +235,6 @@ class ParamTable:
             print()
             if self.first_unvisited is None:
                 print("All breaths have been visited, starting from the beginning\n")
-                self.first_unvisited = 0
             else:
                 print(f"First unvisited breath: {OFFSET + self.first_unvisited}\n")
         except Exception as e:
@@ -330,6 +331,10 @@ class LabelerUI:
         self.info = np.empty((rows, cols), dtype=object)
         self.mask = np.empty((rows, cols), dtype=object)
         self.annotation = np.empty((rows, cols), dtype=object)
+
+    def set_fig_title(self, title):
+        # set the figure title
+        self.fig.canvas.get_tk_widget().master.title(title)
 
     def init_sub_axes(self):
         for r in range(self.rows):
@@ -512,7 +517,12 @@ class BreathLabeler:
         self.total_pages = np.ceil(breath_data.n_breaths / self.per_page).astype(int)
         self.ui.draw_top_ax(breath_data.timestamp, breath_data.flow, self.total_pages)
         self.page = -1
-        self.update(self.param_table.first_unvisited // self.per_page)
+        if self.param_table.first_unvisited is None:
+            self.ui.set_fig_title(f"Breath Labeler: [{self.breath_data.in_file_path}] ***All Visited***")
+            self.update(0)
+        else:
+            self.ui.set_fig_title(f"Breath Labeler: [{self.breath_data.in_file_path}]")
+            self.update(self.param_table.first_unvisited // self.per_page)
         # Show the plot in the top left corner of the screen
         plt.gcf().canvas.manager.window.wm_geometry("+0+0")
         plt.show()
@@ -634,4 +644,4 @@ if ENTIRE_FOLDER:
 else:
     breath_data = BreathLoader(READ_PATH)
     param_table = ParamTable(SAVE_PATH, breath_data)
-    labeler = BreathLabeler(breath_data, param_table, ROWS, COLS, WIDTH, HEIGHT)
+    labeler = BreathLabeler(breath_data, param_table, ROWS, COLS, WIDTH, HEIGHT,)
