@@ -58,6 +58,9 @@ Configurations begin here
 # do not include slash at the end
 READ_FOLDER = "data"
 SAVE_FOLDER = "breathlabels"
+
+# specifc file or entire folder
+ENTIRE_FOLDER = False
 IN_FILE_NAME = "20190616_EVLP551_converted.csv"
 OUT_FILE_NAME = IN_FILE_NAME[:-13] + "labeled.csv"
 
@@ -619,6 +622,16 @@ class BreathLabeler:
         self.param_table.save()
 
 
-breath_data = BreathLoader(READ_PATH)
-param_table = ParamTable(SAVE_PATH, breath_data)
-labeler = BreathLabeler(breath_data, param_table, ROWS, COLS, WIDTH, HEIGHT)
+if ENTIRE_FOLDER:
+    for filename in os.listdir(READ_FOLDER):
+        if filename.endswith(".csv"):
+            print(f"Processing {filename}")
+            in_file_path = os.path.join(READ_FOLDER, filename)
+            out_file_path = os.path.join(SAVE_FOLDER, filename[:-13] + "labeled.csv")
+            breath_data = BreathLoader(in_file_path)
+            param_table = ParamTable(out_file_path, breath_data)
+            labeler = BreathLabeler(breath_data, param_table, ROWS, COLS, WIDTH, HEIGHT)
+else:
+    breath_data = BreathLoader(READ_PATH)
+    param_table = ParamTable(SAVE_PATH, breath_data)
+    labeler = BreathLabeler(breath_data, param_table, ROWS, COLS, WIDTH, HEIGHT)
