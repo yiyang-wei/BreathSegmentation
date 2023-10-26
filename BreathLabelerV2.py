@@ -22,7 +22,7 @@ To label the breaths:
 
 To navigate between pages:
 1. Press LEFT or RIGHT to go to the previous/next page.
-2. Press ENTER to go to the next unvisited or questionable page.
+2. Press ENTER to go to the next unvisited or questionable page (no effect if no such page).
 3. Click on the top plot to go to the clicked page.
 
 To save and exit:
@@ -607,21 +607,16 @@ class BreathLabeler:
             next_unvisited = self.param_table.find_first_unvisited(end_index)
             next_questionable = self.param_table.find_first_questionable(end_index)
             if next_unvisited is None and next_questionable is None:
-                print("No more unvisited or questionable breaths after this page, starting from the beginning")
                 next_unvisited = self.param_table.find_first_unvisited()
                 next_questionable = self.param_table.find_first_questionable()
             if next_unvisited is None and next_questionable is None:
                 print("No more unvisited or questionable breaths")
             elif next_unvisited is None:
-                print("No more unvisited breaths, starting from the first questionable breath")
                 self.update(next_questionable // self.per_page)
             elif next_questionable is None:
                 print("No more questionable breaths, starting from the first unvisited breath")
                 self.update(next_unvisited // self.per_page)
             else:
-                print(f"The first unvisited breath is {OFFSET + next_unvisited}")
-                print(f"The first questionable breath is {OFFSET + next_questionable}")
-                print("Starting from the first unvisited or questionable breath")
                 self.update(min(next_unvisited, next_questionable) // self.per_page)
         elif event.key == 'right':
             self.update(self.page + 1)
@@ -689,4 +684,4 @@ if ENTIRE_FOLDER:
 else:
     breath_data = BreathLoader(READ_PATH)
     param_table = ParamTable(SAVE_PATH, breath_data)
-    labeler = BreathLabeler(breath_data, param_table, ROWS, COLS, WIDTH, HEIGHT,)
+    labeler = BreathLabeler(breath_data, param_table, ROWS, COLS, WIDTH, HEIGHT)
