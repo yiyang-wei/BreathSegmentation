@@ -6,6 +6,13 @@ The user can then label each breath as one of the following types in configurati
 The program will save the labels as well as the breath parameters to a CSV file.
 The program will also save the progress so that the user can continue from where they left off.
 
+To run the program:
+1. Set the file path and name in configuration.
+2. Set to unlabeled file will create a new CSV file and start from the beginning.
+3. Set to partially labeled file will read the labels from the CSV file and continue from there.
+4. Set to fully labeled file will read the labels from the CSV file and start from the beginning.
+5. New labels will overwrite the old labels for the same breaths.
+
 To label the breaths:
 1. Left click on subplots to switch between breath types.
 2. Right click on subplots to show/hide the breath parameters.
@@ -14,8 +21,8 @@ To label the breaths:
 5. Press BACKSPACE to clear all masks and labels.
 
 To navigate between pages:
-1. Press ENTER or RIGHT to go to the next page.
-2. Press LEFT to go to the previous page.
+1. Press LEFT or RIGHT to go to the previous/next page.
+2. Press ENTER to go to the next unvisited or questionable page.
 3. Click on the top plot to go to the clicked page.
 
 To save and exit:
@@ -57,8 +64,8 @@ Configurations begin here
 """
 
 # do not include slash at the end
-READ_FOLDER = "data"
-SAVE_FOLDER = "breathlabels"
+READ_FOLDER = r"C:\Users\weiyi\Workspace\UHN\ventilator data"
+SAVE_FOLDER = r"C:\Users\weiyi\Workspace\UHN\ventilator breath labels"
 
 # specifc file or entire folder
 ENTIRE_FOLDER = False
@@ -262,11 +269,19 @@ class ParamTable:
         # use Breath_num as index
         self.df.set_index("Breath_num", inplace=True)
 
-    def find_first_unvisited(self):
-        """Return the index of the first unvisited breath."""
-        unvisited = np.where(self.breath_labels == BreathLabel.Unvisited.value)[0]
+    def find_first_unvisited(self, start_breath_index=0):
+        """Return the index of the first unvisited breath since the given index."""
+        unvisited = np.where(self.breath_labels[start_breath_index:] == BreathLabel.Unvisited.value)[0]
         if unvisited.shape[0] > 0:
-            return unvisited[0]
+            return unvisited[0] + start_breath_index
+        else:
+            return None
+
+    def find_first_questionable(self, start_breath_index=0):
+        """Return the index of the first questionable breath."""
+        questionable = np.where(self.breath_labels[start_breath_index:] == BreathLabel.Question.value)[0]
+        if questionable.shape[0] > 0:
+            return questionable[0] + start_breath_index
         else:
             return None
 
@@ -587,7 +602,28 @@ class BreathLabeler:
                     if self.in_range(r, c):
                         self.ui.toggle_detail(r, c)
             self.ui.fig.canvas.draw()
-        elif event.key == 'enter' or event.key == 'right':
+        elif event.key == 'enter':
+            end_index = min((self.page + 1) * self.per_page, self.breath_data.n_breaths)
+            next_unvisited = self.param_table.find_first_unvisited(end_index)
+            next_questionable = self.param_table.find_first_questionable(end_index)
+            if next_unvisited is None and next_questionable is None:
+                print("No more unvisited or questionable breaths after this page, starting from the beginning")
+                next_unvisited = self.param_table.find_first_unvisited()
+                next_questionable = self.param_table.find_first_questionable()
+            if next_unvisited is None and next_questionable is None:
+                print("No more unvisited or questionable breaths")
+            elif next_unvisited is None:
+                print("No more unvisited breaths, starting from the first questionable breath")
+                self.update(next_questionable // self.per_page)
+            elif next_questionable is None:
+                print("No more questionable breaths, starting from the first unvisited breath")
+                self.update(next_unvisited // self.per_page)
+            else:
+                print(f"The first unvisited breath is {OFFSET + next_unvisited}")
+                print(f"The first questionable breath is {OFFSET + next_questionable}")
+                print("Starting from the first unvisited or questionable breath")
+                self.update(min(next_unvisited, next_questionable) // self.per_page)
+        elif event.key == 'right':
             self.update(self.page + 1)
         elif event.key == 'left':
             self.update(self.page - 1)
