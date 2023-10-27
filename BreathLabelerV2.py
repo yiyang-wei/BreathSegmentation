@@ -120,14 +120,16 @@ for label in BreathLabel:
             SHORTCUT_DICT[shortcut] = label.value
 
 
-def quick_filter(duration, vol_ratio, PEEP):
+def quick_filter(duration, vol_ratio, PEEP, time_gap):
     """Quickly filter the breaths based on their duration."""
     if duration < 4 or duration > 10:  # Too short or too long
         return BreathLabel.Noise.value  # Noise
     elif duration < 7:  # Shorter Breaths
         return BreathLabel.Assessment.value  # Assessment
-    elif abs(vol_ratio - 1) > 0.1:  # In_volume and ex_volume are not balanced
-        return BreathLabel.Bronch.value  # Bronchospasm
+    elif time_gap > 5000:  # Too long gap
+        return BreathLabel.Deflation.value  # Deflation
+    elif vol_ratio < 0.9 or vol_ratio > 1.087:  # In_volume and ex_volume are not balanced
+        return BreathLabel.Question.value  # Question
     elif abs(PEEP - 5) > 1:  # PEEP is far from 5
         return BreathLabel.Deflation.value  # Deflation
     else:
@@ -652,7 +654,7 @@ class BreathLabeler:
                     params = self.param_table.get_param(breath_index)
                     label = self.param_table.get_label(breath_index)
                     if label == BreathLabel.Unvisited.value:
-                        label = quick_filter(params["Duration(s)"], params["IE_vol_ratio"], params["PEEP"])
+                        label = quick_filter(params["Duration(s)"], params["IE_vol_ratio"], params["PEEP"], params["Max_gap(ms)"])
                     self.ui.update_subplot(r, c, part_data, params, label)
                 else:
                     self.ui.clear_mark(r, c)
