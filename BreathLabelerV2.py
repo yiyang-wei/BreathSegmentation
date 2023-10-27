@@ -122,12 +122,12 @@ for label in BreathLabel:
 
 def quick_filter(duration, vol_ratio, PEEP, time_gap):
     """Quickly filter the breaths based on their duration."""
-    if duration < 4 or duration > 10:  # Too short or too long
+    if time_gap > 5000:  # Too long gap
+        return BreathLabel.Deflation.value  # Deflation
+    elif duration < 4 or duration > 10:  # Too short or too long
         return BreathLabel.Noise.value  # Noise
     elif duration < 7:  # Shorter Breaths
         return BreathLabel.Assessment.value  # Assessment
-    elif time_gap > 5000:  # Too long gap
-        return BreathLabel.Deflation.value  # Deflation
     elif vol_ratio < 0.9 or vol_ratio > 1.087:  # In_volume and ex_volume are not balanced
         return BreathLabel.Question.value  # Question
     elif abs(PEEP - 5) > 1:  # PEEP is far from 5
