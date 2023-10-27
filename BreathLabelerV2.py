@@ -107,7 +107,8 @@ class BreathLabel(Enum):
     Question = (5, "orange", ["5"])
     InPause = (6, "gold", ["6"])
     ExPause = (7, "indigo", ["7"])
-    Noise = (8, "red", ["8", "9"])
+    Recruitment = (8, "aqua", ["8"])
+    Noise = (9, "red", ["9"])
 
 
 N_LABELS = len(BreathLabel)
