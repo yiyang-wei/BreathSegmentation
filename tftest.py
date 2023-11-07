@@ -28,7 +28,8 @@ for file in os.listdir(FOLDER):
 y = {}
 X = []
 for evlp_id, in_file_path, outcome in ventilator_files[4:16]:
-    breath = pd.read_csv(in_file_path, header=0, usecols=["Timestamp", "Pressure", "Flow", "B_phase"])
+    # breath = pd.read_csv(in_file_path, header=0, usecols=["Timestamp", "Pressure", "Flow", "B_phase"])
+    breath = pd.read_csv(in_file_path, header=0, usecols=["Timestamp", "Flow"])
     breath["Id"] = evlp_id
     X.append(breath)
     y[evlp_id] = outcome
@@ -42,7 +43,7 @@ print(y)
 
 print("Extracting features...")
 
-features = extract_relevant_features(X, y, column_id='Id', column_sort='Timestamp', ml_task='classification', n_jobs=1)
+features = extract_relevant_features(X, y, column_id='Id', column_sort='Timestamp', ml_task='classification')
 
 print("Saving features...")
 
