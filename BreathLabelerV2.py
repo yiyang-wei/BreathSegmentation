@@ -64,12 +64,12 @@ Configurations begin here
 """
 
 # do not include slash at the end
-READ_FOLDER = r"C:\Users\weiyi\Workspace\UHN\ventilator data"
-SAVE_FOLDER = r"C:\Users\weiyi\Workspace\UHN\ventilator breath labels"
+READ_FOLDER = r"C:\Users\yiyan\WorkSpace\UHN\ventilator converted files"
+SAVE_FOLDER = r"C:\Users\yiyan\Workspace\UHN\ventilator breath labels"
 
 # specifc file or entire folder
 ENTIRE_FOLDER = False
-IN_FILE_NAME = "20190616_EVLP551_converted.csv"
+IN_FILE_NAME = "20190707_EVLP556_converted.csv"
 OUT_FILE_NAME = IN_FILE_NAME[:-13] + "labeled.csv"
 
 # window size
@@ -165,6 +165,7 @@ class BreathLoader:
             diff_phase = np.diff(self.phase)
             self.boundary = np.where(diff_phase == 1)[0] + 1
             self.switch = np.where(diff_phase == -1)[0] + 1
+            self.switch = self.switch[self.switch > self.boundary[0]]
             self.n_breaths = self.boundary.shape[0] - 1
             print(f"Successfully loaded {self.n_breaths} breaths from {in_file_path}\n")
         except Exception as e:
@@ -177,8 +178,8 @@ class BreathLoader:
             end_breath_index = start_breath_index
         start_breath_index = np.clip(start_breath_index, 0, self.n_breaths - 1)
         end_breath_index = np.clip(end_breath_index, 0, self.n_breaths - 1)
-        start_idx = self.boundary[start_breath_index] + 1
-        end_idx = self.boundary[end_breath_index + 1] + 1
+        start_idx = self.boundary[start_breath_index]
+        end_idx = self.boundary[end_breath_index + 1]
         return start_idx, end_idx
 
     def get_breath_data(self, start_breath_index, end_breath_index=None):
@@ -189,8 +190,15 @@ class BreathLoader:
     def get_phase(self, breath_index):
         """Get the inhaling and exhaling data of the breath at the given index."""
         start_idx, end_idx = self.get_breath_boundary(breath_index)
-        mid_idx = self.switch[breath_index] + 1
+        mid_idx = self.switch[breath_index]
         return start_idx, mid_idx, end_idx
+
+    def find_breath_by_index(self, index):
+        return np.searchsorted(self.boundary, index, side='right') - 1
+
+    def find_breath_by_timestamp(self, timestamp):
+        clicked_index = np.searchsorted(self.timestamp, timestamp, side='left')
+        return self.find_breath_by_index(clicked_index)
 
     def calc_params(self, breath_index):
         """Get the volume of the breath at the given index."""
@@ -211,6 +219,7 @@ class BreathLoader:
         params["Ex_duration(s)"] = (self.timestamp[end_idx] - self.timestamp[mid_idx]) / 10000
         params["IE_duration_ratio"] = params["In_duration(s)"] / params["Ex_duration(s)"]
         params["P_peak"] = np.max(in_pressure) / 100
+        params["F_min"] = min(np.min(in_flow), np.min(ex_flow)) / 100
         params["PEEP"] = self.pressure[start_idx - 1] / 100
         params["Dy_comp"] = - params["Ex_vol(ml)"] / (params["P_peak"] - 5)
         return params
@@ -559,10 +568,8 @@ class BreathLabeler:
         return self.page * self.per_page + r * self.cols + c < self.breath_data.n_breaths
 
     def page_clicked(self, xdata):
-        # find the index of the clicked point
-        clicked_index = np.searchsorted(self.breath_data.timestamp, xdata, side='left')
-        # find the index of the breath that contains the clicked point
-        breath_index = np.searchsorted(self.breath_data.boundary, clicked_index, side='right') - 1
+        # find the breath index of the clicked point
+        breath_index = self.breath_data.find_breath_by_timestamp(xdata)
         # get the page start index of the breath
         page_index = breath_index // self.per_page
         return page_index

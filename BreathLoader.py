@@ -20,6 +20,7 @@ class BreathLoader:
             diff_phase = np.diff(self.phase)
             self.boundary = np.where(diff_phase == 1)[0] + 1
             self.switch = np.where(diff_phase == -1)[0] + 1
+            self.switch = self.switch[self.switch > self.boundary[0]]
             self.n_breaths = self.boundary.shape[0] - 1
             print(f"Successfully loaded {self.n_breaths} breaths from {in_file_path}\n")
         except Exception as e:
