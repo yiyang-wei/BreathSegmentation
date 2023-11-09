@@ -91,7 +91,7 @@ def check_significance(features, y):
     print(p_values.sort_values().tail(10))
 
 def lasso_feature_selection(features, y):
-    lasso = LassoCV(max_iter=100000).fit(features, y)
+    lasso = LassoCV(max_iter=100000, n_jobs=24).fit(features, y)
     importance = np.abs(lasso.coef_)
     feature_names = np.array(features.columns)
     selected_features = feature_names[importance > 0]
