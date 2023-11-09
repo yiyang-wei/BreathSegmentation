@@ -49,6 +49,7 @@ def process_selected_cases(id_to_filename):
     with open(os.path.join(SAVEFOLER, f"selected_features_{file_name}.txt"), "w") as f:
         lines = [f"Adjusted R Square: {r_square}\n"] + [f"{feature}\n" for feature in selected]
         f.writelines(lines)
+    return r_square, selected
 
 
 def load_and_prepare_data(id_to_filename):
@@ -69,7 +70,7 @@ def load_and_prepare_data(id_to_filename):
         for i in range(n_breaths):
             start_idx, end_idx = breath_data.get_breath_boundary(i)
             breath_id[start_idx:end_idx] = i + 1
-            y[evlp_id * 10000 + i + 1] = breath_data.calc_params(i)
+            y[evlp_id * 10000 + i + 1] = breath_data.dynamic_compliance(i)
 
         # remove leading 0s in breath_id
         timestamps = timestamps[breath_id > 0]
@@ -82,6 +83,9 @@ def load_and_prepare_data(id_to_filename):
 
     X = pd.concat(Xs)
     y = pd.concat(ys)
+
+    print("X shape:", X.shape)
+    print("y shape:", y.shape)
 
     return X, y
 
@@ -140,9 +144,20 @@ if __name__ == "__main__":
              574, 575, 577, 579, 592, 593, 595, 598, 600, 603, 610, 615, 616,
              617, 618, 619, 621, 631, 682, 685, 686, 694, 698, 730, 731, 736,
              738, 753, 762, 782, 803, 817, 818]
+    count_selected = {}
     for c in cases:
         id_to_filename = get_filenames_by_ids([c])
-        process_selected_cases(id_to_filename)
+        r_square, selected = process_selected_cases(id_to_filename)
+        if r_square > 0.5:
+            for feature in selected:
+                count_selected[feature] = count_selected.get(feature, 0) + 1
+        print()
+        print("Current Selected Features Frequency:")
+        # print count_selected in descending order
+        for feature, count in sorted(count_selected.items(), key=lambda x: x[1], reverse=True):
+            print(f"{feature}: {count}")
+        print()
+
 
 """EVLP551
 'Pressure__c3__lag_1' 'Flow__c3__lag_3'
