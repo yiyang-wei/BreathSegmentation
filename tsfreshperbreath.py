@@ -105,8 +105,11 @@ def adjusted_R_square(features, selected, y):
     model = LinearRegression().fit(X, y)
     y_pred = model.predict(X)
     r_square = r2_score(y, y_pred)
+    print("R Square:", r_square)
     n = len(y)
+    print("Number of Samples:", n)
     p = len(selected)
+    print("Number of Features:", p)
     r_square = 1 - (1 - r_square) * (n - 1) / (n - p - 1)
     print("Adjusted R Square:", r_square)
     return r_square
