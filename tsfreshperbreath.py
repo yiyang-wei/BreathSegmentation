@@ -1,5 +1,3 @@
-import matplotlib.pyplot as plt
-
 from BreathLoader import BreathLoader
 from tsfresh import extract_relevant_features
 from tsfresh.feature_selection import significance_tests
@@ -12,32 +10,57 @@ import re
 
 # 818 - 762
 
-def load_and_prepare_data(start=0, end=None):
-    VENTILATOR_FOLDER = r"C:\Users\yiyan\WorkSpace\UHN\ventilator converted files"
+VENTILATOR_FOLDER = r"C:\Users\yiyan\WorkSpace\UHN\ventilator converted files"
+DONOR_FILE = r"C:\Users\yiyan\WorkSpace\UHN\EVLP data\EVLP#1-879_donor.csv"
+SAVEFOLER = "tsfresh feature tables"
 
-    # do not use 550, 556
-    # try 551, 552, 557 first
 
-    ventilator_files = {}
+def save_to_csv(df, out_file_name):
+    df.to_csv(os.path.join(SAVEFOLER, out_file_name))
+
+def file_name_identifier(evlp_ids):
+    if len(evlp_ids) == 1:
+        file_names_identifier = f"{evlp_ids[0]}"
+    else:
+        file_names_identifier = f"{evlp_ids[0]}_{evlp_ids[-1]}"
+    return file_names_identifier
+
+def get_filenames_by_ids(evlp_ids):
+    id_to_filename = {}
     for file in os.listdir(VENTILATOR_FOLDER):
         if file.endswith(".csv"):
             evlp_id = int(re.search(r"EVLP\d+", file).group()[4:])
-            ventilator_files[evlp_id] = os.path.join(VENTILATOR_FOLDER, file)
+            if evlp_id in evlp_ids:
+                id_to_filename[evlp_id] = os.path.join(VENTILATOR_FOLDER, file)
+    return id_to_filename
 
-    evlp_cases = list(ventilator_files.keys())
+
+def process_selected_cases(id_to_filename):
+    evlp_cases = list(id_to_filename.keys())
     evlp_cases.sort()
-    if end is None:
-        selected_cases = evlp_cases[start:]
-    else:
-        selected_cases = evlp_cases[start:end]
-    print("Selected Cases:", selected_cases)
+    file_name = file_name_identifier(evlp_cases)
+    print("Loading Selected Cases:", evlp_cases)
+    X, y = load_and_prepare_data(id_to_filename)
+    save_to_csv(y, f"dy_comp_{file_name}.csv")
+    features = decomposition(X, y)
+    save_to_csv(features, f"features_{file_name}.csv")
+    selected = lasso_feature_selection(features, y)
+    r_square = adjusted_R_square(features, selected, y)
+    with open(os.path.join(SAVEFOLER, f"selected_features_{file_name}.txt"), "w") as f:
+        lines = [f"Adjusted R Square: {r_square}\n"] + [f"{feature}\n" for feature in selected]
+        f.writelines(lines)
+
+
+def load_and_prepare_data(id_to_filename):
+    donor_df = pd.read_csv(DONOR_FILE, header=0, usecols=["Evlp Id No", "Donor Weight Kg"])
 
     Xs = []
     ys = []
-    for evlp_id in selected_cases:
-        breath_data = BreathLoader(ventilator_files[evlp_id])
+    for evlp_id in id_to_filename.keys():
+        body_weight = donor_df.loc[donor_df["Evlp Id No"] == evlp_id, "Donor Weight Kg"].values[0]
+        breath_data = BreathLoader(id_to_filename[evlp_id])
         timestamps = breath_data.timestamp
-        flow = breath_data.flow
+        flow = breath_data.flow / body_weight
         pressure = breath_data.pressure
 
         breath_id = np.zeros_like(timestamps)
@@ -45,9 +68,8 @@ def load_and_prepare_data(start=0, end=None):
         y = {}
         for i in range(n_breaths):
             start_idx, end_idx = breath_data.get_breath_boundary(i)
-            breath_id[start_idx:end_idx] += i + 1
-            params = breath_data.calc_params(i)
-            y[evlp_id * 10000 + i + 1] = params["Dy_comp"]
+            breath_id[start_idx:end_idx] = i + 1
+            y[evlp_id * 10000 + i + 1] = breath_data.calc_params(i)
 
         # remove leading 0s in breath_id
         timestamps = timestamps[breath_id > 0]
@@ -61,14 +83,12 @@ def load_and_prepare_data(start=0, end=None):
     X = pd.concat(Xs)
     y = pd.concat(ys)
 
-    print(X.shape)
-    print(y)
-
     return X, y
 
 
 def decomposition(X, y):
     features = extract_relevant_features(X, y, column_id='Id', column_sort='Timestamp')
+    print("Number of Features:", features.shape[1])
     return features
 
 
@@ -90,6 +110,7 @@ def check_significance(features, y):
 
     print(p_values.sort_values().tail(10))
 
+
 def lasso_feature_selection(features, y):
     lasso = LassoCV(max_iter=100000, n_jobs=24).fit(features, y)
     importance = np.abs(lasso.coef_)
@@ -99,6 +120,7 @@ def lasso_feature_selection(features, y):
     print("Number of Selected Features:", len(selected_features))
     return selected_features
 
+
 def adjusted_R_square(features, selected, y):
     # return the adjusted R square of the linear regression model using the selected features
     X = features[selected]
@@ -107,32 +129,25 @@ def adjusted_R_square(features, selected, y):
     r_square = r2_score(y, y_pred)
     print("R Square:", r_square)
     n = len(y)
-    print("Number of Samples:", n)
     p = len(selected)
-    print("Number of Features:", p)
     r_square = 1 - (1 - r_square) * (n - 1) / (n - p - 1)
     print("Adjusted R Square:", r_square)
     return r_square
 
+
 if __name__ == "__main__":
-    # SAVEPATH = {"y": "tf_y.csv", "features": "tf_features.csv"}
-    SAVEPATH = {"y": "tf_y_551.csv", "features": "tf_features_551.csv"}
-    # X, y = load_and_prepare_data(1,2)
-    # y.to_csv(SAVEPATH["y"])
-    # features = decomposition(X, y)
-    # print(features.shape)
-    # features.to_csv(SAVEPATH["features"])
-    y = pd.read_csv(SAVEPATH["y"], header=0, index_col=0).squeeze()
-    features = pd.read_csv(SAVEPATH["features"], header=0, index_col=0)
-    # check_significance(features, y)
-    r_square = 0
-    for i in range(5):
-        selected = lasso_feature_selection(features, y)
-        r_square = adjusted_R_square(features, selected, y)
-        if r_square > 0.8:
-            break
+    cases = [551, 553, 554, 555, 557, 558, 560, 563, 564, 565, 568, 572, 573,
+             574, 575, 577, 579, 592, 593, 595, 598, 600, 603, 610, 615, 616,
+             617, 618, 619, 621, 631, 682, 685, 686, 694, 698, 730, 731, 736,
+             738, 753, 762, 782, 803, 817, 818]
+    for c in cases:
+        id_to_filename = get_filenames_by_ids([c])
+        process_selected_cases(id_to_filename)
 
-
-"""
+"""EVLP551
 'Pressure__c3__lag_1' 'Flow__c3__lag_3'
+"""
+
+"""EVLP557
+'Pressure__c3__lag_1' 'Pressure__c3__lag_2' 'Pressure__abs_energy'
 """

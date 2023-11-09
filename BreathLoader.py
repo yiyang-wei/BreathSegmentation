@@ -55,6 +55,17 @@ class BreathLoader:
         clicked_index = np.searchsorted(self.timestamp, timestamp, side='left')
         return self.find_breath_by_index(clicked_index)
 
+    def dynamic_compliance(self, breath_index):
+        """Get the dynamic compliance of the breath at the given index."""
+        start_idx, mid_idx, end_idx = self.get_phase(breath_index)
+        in_timestamp = self.timestamp[start_idx:mid_idx]
+        in_pressure = self.pressure[start_idx:mid_idx]
+        ex_flow = self.flow[mid_idx:end_idx]
+
+        ex_vol = np.trapz(ex_flow, in_timestamp) / 100000
+        dy_comp = - ex_vol / (np.max(in_pressure) - 5)
+        return dy_comp
+
     def calc_params(self, breath_index):
         """Get the volume of the breath at the given index."""
         start_idx, mid_idx, end_idx = self.get_phase(breath_index)
