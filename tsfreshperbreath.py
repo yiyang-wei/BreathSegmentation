@@ -1,8 +1,7 @@
 from BreathLoader import BreathLoader
 from tsfresh import extract_relevant_features
 from tsfresh.feature_selection import significance_tests
-from sklearn.linear_model import LassoCV, Lasso, LinearRegression
-from sklearn.metrics import r2_score
+from sklearn.linear_model import LassoCV, Lasso
 from sklearn.preprocessing import StandardScaler
 import numpy as np
 import pandas as pd
@@ -50,7 +49,7 @@ def process_selected_cases(id_to_filename):
             r_square = float(lines[0].split(":")[1])
             print("Adjusted R Square:", r_square)
             selected = [line.strip() for line in lines[1:]]
-            print("Selected Features:", selected)
+            print("Number of Selected Features:", len(selected))
             return r_square, selected
     if os.path.exists(os.path.join(SAVEFOLER, y_file_name)) and os.path.exists(os.path.join(SAVEFOLER, features_file_name)):
         print("Read Data from File:", y_file_name, features_file_name)
@@ -62,8 +61,7 @@ def process_selected_cases(id_to_filename):
         save_to_csv(y, y_file_name)
         features = decomposition(X, y)
         save_to_csv(features, features_file_name)
-    selected = lasso_feature_selection(features, y)
-    r_square = adjusted_R_square(features, selected, y)
+    selected, r_square = lasso_feature_selection(features, y)
     with open(os.path.join(SAVEFOLER, selected_features_file_name), "w") as f:
         lines = [f"Adjusted R Square: {r_square}\n"] + [f"{feature}\n" for feature in selected]
         f.writelines(lines)
@@ -135,8 +133,22 @@ def check_significance(features, y):
 
 def lasso_feature_selection(features, y):
     scaler = StandardScaler()
+    feature_names = np.array(features.columns)
     features_scaled = scaler.fit_transform(features)
-    lasso_cv = LassoCV(max_iter=250000, n_jobs=24, cv=5, alphas=None).fit(features_scaled, y)
+    n = len(y)
+
+    lasso_cv = LassoCV(max_iter=100000, n_jobs=24, cv=10, n_alphas=50, eps=2e-2).fit(features_scaled, y)
+
+    important_features = feature_names[lasso_cv.coef_ != 0]
+    print("Number of Selected Features using the Optimal Model:", len(important_features))
+
+    if len(important_features) <= 40:
+        # calculate the adjusted R square
+        r_square = lasso_cv.score(features_scaled, y)
+        print("R Square:", r_square)
+        p = len(important_features)
+        adj_r_square = 1 - (1 - r_square) * (n - 1) / (n - p - 1)
+        return important_features, adj_r_square
 
     # Calculate mean and standard error of the mean squared errors
     mse_mean = np.mean(lasso_cv.mse_path_, axis=1)
@@ -145,40 +157,28 @@ def lasso_feature_selection(features, y):
     # Find the index of the minimum MSE
     min_mse_index = np.argmin(mse_mean)
 
-    # Find the minimum alpha within one standard error of the minimum MSE
-    alpha_1se = lasso_cv.alphas_[np.where(mse_mean >= mse_mean[min_mse_index] - mse_se[min_mse_index])[0][0]]
+    # Find the maximum alpha within one standard error of the minimum MSE
+    alpha_1se = lasso_cv.alphas_[np.where(mse_mean <= mse_mean[min_mse_index] + mse_se[min_mse_index])[0][0]]
 
     # Fit Lasso model with the chosen alpha_1se
-    lasso_1se = Lasso(alpha=alpha_1se, max_iter=250000)
-    lasso_1se.fit(features, y)
+    lasso_1se = Lasso(alpha=alpha_1se, max_iter=100000)
+    lasso_1se.fit(features_scaled, y)
 
     # Extract coefficients using the alpha_1se
     coef_1se = lasso_1se.coef_
-
-    # Get the feature names
-    feature_names = np.array(features.columns)
 
     # Select features where the coefficient is non-zero
     selected_features_1se = feature_names[coef_1se != 0]
 
     # Print the selected features
-    print("Number of Selected Features using 1se rule:", len(selected_features_1se))
-    return selected_features_1se
+    print("Number of Selected Features using 1se Rule:", len(selected_features_1se))
 
-
-def adjusted_R_square(features, selected, y):
-    # return the adjusted R square of the linear regression model using the selected features
-    X = features[selected]
-    model = LinearRegression().fit(X, y)
-    y_pred = model.predict(X)
-    r_square = r2_score(y, y_pred)
+    # calculate the adjusted R square
+    r_square = lasso_1se.score(features_scaled, y)
     print("R Square:", r_square)
-    n = len(y)
-    p = len(selected)
-    r_square = 1 - (1 - r_square) * (n - 1) / (n - p - 1)
-    print("Adjusted R Square:", r_square)
-    return r_square
-
+    p = len(selected_features_1se)
+    adj_r_square = 1 - (1 - r_square) * (n - 1) / (n - p - 1)
+    return selected_features_1se, adj_r_square
 
 if __name__ == "__main__":
     cases = [551, 553, 554, 555, 557, 558, 560, 563, 564, 565, 568, 572, 573,
