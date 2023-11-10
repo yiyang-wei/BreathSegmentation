@@ -1,8 +1,9 @@
 from BreathLoader import BreathLoader
 from tsfresh import extract_relevant_features
 from tsfresh.feature_selection import significance_tests
-from sklearn.linear_model import LassoCV, LinearRegression
+from sklearn.linear_model import LassoCV, Lasso, LinearRegression
 from sklearn.metrics import r2_score
+from sklearn.preprocessing import StandardScaler
 import numpy as np
 import pandas as pd
 import os
@@ -47,12 +48,14 @@ def process_selected_cases(id_to_filename):
         with open(os.path.join(SAVEFOLER, selected_features_file_name), "r") as f:
             lines = f.readlines()
             r_square = float(lines[0].split(":")[1])
+            print("Adjusted R Square:", r_square)
             selected = [line.strip() for line in lines[1:]]
-        return r_square, selected
+            print("Selected Features:", selected)
+            return r_square, selected
     if os.path.exists(os.path.join(SAVEFOLER, y_file_name)) and os.path.exists(os.path.join(SAVEFOLER, features_file_name)):
         print("Read Data from File:", y_file_name, features_file_name)
         y = pd.read_csv(os.path.join(SAVEFOLER, y_file_name), header=0, index_col=0).squeeze()
-        features = pd.read_csv(os.path.join(SAVEFOLER, features_file_name), header=[0, 1], index_col=0)
+        features = pd.read_csv(os.path.join(SAVEFOLER, features_file_name), header=0, index_col=0)
     else:
         print("Loading Selected Cases:", evlp_cases)
         X, y = load_and_prepare_data(id_to_filename)
@@ -131,13 +134,36 @@ def check_significance(features, y):
 
 
 def lasso_feature_selection(features, y):
-    lasso = LassoCV(max_iter=100000, n_jobs=24).fit(features, y)
-    importance = np.abs(lasso.coef_)
+    scaler = StandardScaler()
+    features_scaled = scaler.fit_transform(features)
+    lasso_cv = LassoCV(max_iter=250000, n_jobs=24, cv=5, alphas=None).fit(features_scaled, y)
+
+    # Calculate mean and standard error of the mean squared errors
+    mse_mean = np.mean(lasso_cv.mse_path_, axis=1)
+    mse_se = np.std(lasso_cv.mse_path_, axis=1) / np.sqrt(lasso_cv.mse_path_.shape[1])
+
+    # Find the index of the minimum MSE
+    min_mse_index = np.argmin(mse_mean)
+
+    # Find the minimum alpha within one standard error of the minimum MSE
+    alpha_1se = lasso_cv.alphas_[np.where(mse_mean >= mse_mean[min_mse_index] - mse_se[min_mse_index])[0][0]]
+
+    # Fit Lasso model with the chosen alpha_1se
+    lasso_1se = Lasso(alpha=alpha_1se, max_iter=250000)
+    lasso_1se.fit(features, y)
+
+    # Extract coefficients using the alpha_1se
+    coef_1se = lasso_1se.coef_
+
+    # Get the feature names
     feature_names = np.array(features.columns)
-    selected_features = feature_names[importance > 0]
-    print("Selected Features:", selected_features)
-    print("Number of Selected Features:", len(selected_features))
-    return selected_features
+
+    # Select features where the coefficient is non-zero
+    selected_features_1se = feature_names[coef_1se != 0]
+
+    # Print the selected features
+    print("Number of Selected Features using 1se rule:", len(selected_features_1se))
+    return selected_features_1se
 
 
 def adjusted_R_square(features, selected, y):
@@ -163,15 +189,25 @@ if __name__ == "__main__":
     for c in cases:
         id_to_filename = get_filenames_by_ids([c])
         r_square, selected = process_selected_cases(id_to_filename)
-        if r_square > 0.5:
-            for feature in selected:
-                count_selected[feature] = count_selected.get(feature, 0) + 1
-        print()
-        print("Current Selected Features Frequency:")
-        # print count_selected in descending order
-        for feature, count in sorted(count_selected.items(), key=lambda x: x[1], reverse=True):
-            print(f"{feature}: {count}")
-        print()
+
+        for feature in selected:
+            if feature not in count_selected:
+                count_selected[feature] = 0
+            count_selected[feature] += 1
+
+    print()
+    print("Selected Features Frequency:")
+    # print count_selected in descending order
+    count = 20
+    for feature, count in sorted(count_selected.items(), key=lambda x: x[1], reverse=True):
+        print(f"{feature}: {count}")
+        count -= 1
+        if count == 0:
+            break
+    print()
+    # save to csv
+    frequency = pd.Series(count_selected)
+    save_to_csv(frequency, "frequency.csv")
 
 
 """EVLP551
