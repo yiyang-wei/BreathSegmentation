@@ -39,14 +39,29 @@ def process_selected_cases(id_to_filename):
     evlp_cases = list(id_to_filename.keys())
     evlp_cases.sort()
     file_name = file_name_identifier(evlp_cases)
-    print("Loading Selected Cases:", evlp_cases)
-    X, y = load_and_prepare_data(id_to_filename)
-    save_to_csv(y, f"dy_comp_{file_name}.csv")
-    features = decomposition(X, y)
-    save_to_csv(features, f"features_{file_name}.csv")
+    y_file_name = f"dy_comp_{file_name}.csv"
+    features_file_name = f"features_{file_name}.csv"
+    selected_features_file_name = f"selected_features_{file_name}.txt"
+    if os.path.exists(os.path.join(SAVEFOLER, selected_features_file_name)):
+        print("Read Selected Features from File:", selected_features_file_name)
+        with open(os.path.join(SAVEFOLER, selected_features_file_name), "r") as f:
+            lines = f.readlines()
+            r_square = float(lines[0].split(":")[1])
+            selected = [line.strip() for line in lines[1:]]
+        return r_square, selected
+    if os.path.exists(os.path.join(SAVEFOLER, y_file_name)) and os.path.exists(os.path.join(SAVEFOLER, features_file_name)):
+        print("Read Data from File:", y_file_name, features_file_name)
+        y = pd.read_csv(os.path.join(SAVEFOLER, y_file_name), header=0, index_col=0).squeeze()
+        features = pd.read_csv(os.path.join(SAVEFOLER, features_file_name), header=[0, 1], index_col=0)
+    else:
+        print("Loading Selected Cases:", evlp_cases)
+        X, y = load_and_prepare_data(id_to_filename)
+        save_to_csv(y, y_file_name)
+        features = decomposition(X, y)
+        save_to_csv(features, features_file_name)
     selected = lasso_feature_selection(features, y)
     r_square = adjusted_R_square(features, selected, y)
-    with open(os.path.join(SAVEFOLER, f"selected_features_{file_name}.txt"), "w") as f:
+    with open(os.path.join(SAVEFOLER, selected_features_file_name), "w") as f:
         lines = [f"Adjusted R Square: {r_square}\n"] + [f"{feature}\n" for feature in selected]
         f.writelines(lines)
     return r_square, selected
