@@ -3,6 +3,7 @@ from tsfresh import extract_relevant_features
 from tsfresh.feature_selection import significance_tests
 from sklearn.linear_model import LassoCV, Lasso
 from sklearn.preprocessing import StandardScaler
+import statsmodels.api as sm
 import numpy as np
 import pandas as pd
 import os
@@ -12,7 +13,7 @@ import re
 
 VENTILATOR_FOLDER = r"C:\Users\yiyan\WorkSpace\UHN\ventilator converted files"
 DONOR_FILE = r"C:\Users\yiyan\WorkSpace\UHN\EVLP data\EVLP#1-879_donor.csv"
-SAVEFOLER = "tsfresh feature tables"
+SAVEFOLER = "tsfresh feature tables assessment"
 
 
 def save_to_csv(df, out_file_name):
@@ -85,8 +86,10 @@ def load_and_prepare_data(id_to_filename):
         y = {}
         for i in range(n_breaths):
             start_idx, end_idx = breath_data.get_breath_boundary(i)
-            breath_id[start_idx:end_idx] = i + 1
-            y[evlp_id * 10000 + i + 1] = breath_data.dynamic_compliance(i)
+            duration = (timestamps[end_idx] - timestamps[start_idx]) / 10000
+            if 5.5 <= duration <= 6.5:
+                breath_id[start_idx:end_idx] = i + 1
+                y[evlp_id * 10000 + i + 1] = breath_data.dynamic_compliance(i)
 
         # remove leading 0s in breath_id
         timestamps = timestamps[breath_id > 0]
@@ -130,6 +133,49 @@ def check_significance(features, y):
 
     print(p_values.sort_values().tail(10))
 
+def forward_selection(features, y, significance_test=0.001):
+    initial_features = features.columns.tolist()
+    best_features = []
+    current_model = None
+
+    while initial_features:
+        pvals = []
+        for candidate in initial_features:
+            # Fit model with the current best features plus the new candidate feature
+            tested_features = best_features + [candidate]
+            new_model = sm.OLS(y, sm.add_constant(features[tested_features])).fit()
+            if current_model is None:
+                p_value = 0
+            else:
+                # check if the new model is significantly better than the current model
+                p_value = sm.stats.anova_lm(current_model, new_model)["Pr(>F)"][1]
+            pvals.append((p_value, candidate))
+
+        # Sort the p-values and get the one for the best candidate
+        pvals.sort()
+        best_pval, best_candidate = pvals[0]
+
+        # If the best p-value is less than our significance threshold, we add the feature to our model
+        if best_pval < significance_test:
+            best_features.append(best_candidate)
+            current_model = new_model
+            initial_features.remove(best_candidate)
+            print("Selected:", best_candidate, "\t\tP-value:", best_pval, "\t\tNew Length:", len(best_features))
+        else:
+            print("P-value:", best_pval)
+            break  # If no new features are significant, we stop the selection process
+
+    print("Number of Selected Features:", len(best_features))
+
+    adj_r_square = current_model.rsquared_adj
+    print("Adjusted R Square:", adj_r_square)
+
+    return best_features, adj_r_square
+
+def adjust_r_square(r_square, n, p):
+    adj_r_square = 1 - (1 - r_square) * (n - 1) / (n - p - 1)
+    print("Adjusted R Square:", adj_r_square)
+    return adj_r_square
 
 def lasso_feature_selection(features, y):
     scaler = StandardScaler()
@@ -137,7 +183,7 @@ def lasso_feature_selection(features, y):
     features_scaled = scaler.fit_transform(features)
     n = len(y)
 
-    lasso_cv = LassoCV(max_iter=100000, n_jobs=24, cv=10, n_alphas=50, eps=2e-2).fit(features_scaled, y)
+    lasso_cv = LassoCV(max_iter=100000, n_jobs=24, cv=10, n_alphas=100, eps=1e-2).fit(features_scaled, y)
 
     important_features = feature_names[lasso_cv.coef_ != 0]
     print("Number of Selected Features using the Optimal Model:", len(important_features))
@@ -147,7 +193,7 @@ def lasso_feature_selection(features, y):
         r_square = lasso_cv.score(features_scaled, y)
         print("R Square:", r_square)
         p = len(important_features)
-        adj_r_square = 1 - (1 - r_square) * (n - 1) / (n - p - 1)
+        adj_r_square = adjust_r_square(r_square, n, p)
         return important_features, adj_r_square
 
     # Calculate mean and standard error of the mean squared errors
@@ -177,13 +223,18 @@ def lasso_feature_selection(features, y):
     r_square = lasso_1se.score(features_scaled, y)
     print("R Square:", r_square)
     p = len(selected_features_1se)
-    adj_r_square = 1 - (1 - r_square) * (n - 1) / (n - p - 1)
+    adj_r_square = adjust_r_square(r_square, n, p)
     return selected_features_1se, adj_r_square
 
 if __name__ == "__main__":
+    # cases = [762, 782, 803, 817, 818]
+    # id_to_filename = get_filenames_by_ids(cases)
+    # r_square, selected = process_selected_cases(id_to_filename)
+    # print(selected)
+    # 621 has NaN in Flow
     cases = [551, 553, 554, 555, 557, 558, 560, 563, 564, 565, 568, 572, 573,
              574, 575, 577, 579, 592, 593, 595, 598, 600, 603, 610, 615, 616,
-             617, 618, 619, 621, 631, 682, 685, 686, 694, 698, 730, 731, 736,
+             617, 618, 619, 631, 682, 685, 686, 694, 698, 730, 731, 736,
              738, 753, 762, 782, 803, 817, 818]
     count_selected = {}
     for c in cases:
