@@ -55,6 +55,11 @@ class BreathLoader:
         clicked_index = np.searchsorted(self.timestamp, timestamp, side='left')
         return self.find_breath_by_index(clicked_index)
 
+    def duration(self, breath_index):
+        """Get the duration of the breath at the given index."""
+        start_idx, end_idx = self.get_breath_boundary(breath_index)
+        return (self.timestamp[end_idx] - self.timestamp[start_idx]) / 10000
+
     def dynamic_compliance(self, breath_index):
         """Get the dynamic compliance of the breath at the given index."""
         start_idx, mid_idx, end_idx = self.get_phase(breath_index)
