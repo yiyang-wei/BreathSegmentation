@@ -45,52 +45,148 @@ def get_assessment_periods(case, duration_tol=0.75, consecutive_breaths=20, nois
     return assessment_periods
 
 
+def supervise_assessment_periods(assessment_periods_per_case = None):
+    if assessment_periods_per_case is None:
+        assessment_periods_per_case = {"Good": {}, "OK": {}, "Bad": {}}
+    for case in evlp_cases.cases.values():
+        if case.case_id in assessment_periods_per_case["Good"]:
+            print(f"Case {case.case_id} already marked as Good.")
+            continue
+        elif case.case_id in assessment_periods_per_case["OK"]:
+            print(f"Case {case.case_id} already marked as OK.")
+            continue
+        elif case.case_id in assessment_periods_per_case["Bad"]:
+            print(f"Case {case.case_id} already marked as Bad.")
+            continue
+        duration_tol = 0.75
+        consecutive_breaths = 20
+        niose_tol = 3
+        while True:
+            assessment_periods = get_assessment_periods(case, duration_tol, consecutive_breaths, niose_tol)
+            print(case.case_id)
+            print(assessment_periods)
+            x = case.per_breath_param_table.param_table.index.to_numpy()
+            y = case.per_breath_param_table.param_table["Duration(s)"].to_numpy()
+            plt.plot(x, y)
+            for start_idx, end_idx in assessment_periods:
+                plt.axvspan(start_idx, end_idx, color="grey", alpha=0.5)
+            plt.tight_layout()
+            plt.show()
+            option = input("Options:\n\tG: Good\n\tO: OK\n\tB: Bad\n\tAP: Adjust Parameters\nInput: ")
+            if option in ["G", "O", "B"]:
+                if option == "G":
+                    assessment_periods_per_case["Good"][case.case_id] = assessment_periods
+                    print(f"Case {case.case_id} marked as Good.")
+                elif option == "O":
+                    assessment_periods_per_case["OK"][case.case_id] = assessment_periods
+                    print(f"Case {case.case_id} marked as OK.")
+                else:
+                    assessment_periods_per_case["Bad"][case.case_id] = assessment_periods
+                    print(f"Case {case.case_id} marked as Bad.")
+                break
+            else:
+                duration_tol = float(input("duration_tol: "))
+                consecutive_breaths = int(input("consecutive_breaths: "))
+                niose_tol = int(input("niose_tol: "))
+
+        assessment_periods_per_case[case.case_id] = assessment_periods
+
+    with open("assessment_periods_per_case.pkl", "wb") as f:
+        pickle.dump(assessment_periods_per_case, f)
+
+
 # assessment_periods_per_case = {"Good": {}, "OK": {}, "Bad": {}}
 with open("assessment_periods_per_case.pkl", "rb") as f:
     assessment_periods_per_case = pickle.load(f)
 
-for case in evlp_cases.cases.values():
-    if case.case_id in assessment_periods_per_case["Good"]:
-        print(f"Case {case.case_id} already marked as Good.")
-        continue
-    elif case.case_id in assessment_periods_per_case["OK"]:
-        print(f"Case {case.case_id} already marked as OK.")
-        continue
-    elif case.case_id in assessment_periods_per_case["Bad"]:
-        print(f"Case {case.case_id} already marked as Bad.")
-        continue
-    duration_tol = 0.75
-    consecutive_breaths = 20
-    niose_tol = 3
-    while True:
-        assessment_periods = get_assessment_periods(case, duration_tol, consecutive_breaths)
-        print(case.case_id)
-        print(assessment_periods)
-        x = case.per_breath_param_table.param_table.index.to_numpy()
-        y = case.per_breath_param_table.param_table["Duration(s)"].to_numpy()
-        plt.plot(x, y)
-        for start_idx, end_idx in assessment_periods:
-            plt.axvspan(start_idx, end_idx, color="grey", alpha=0.5)
-        plt.tight_layout()
-        plt.show()
-        option = input("Options:\n\tG: Good\n\tO: OK\n\tB: Bad\n\tAP: Adjust Parameters\nInput: ")
-        if option in ["G", "O", "B"]:
-            if option == "G":
-                assessment_periods_per_case["Good"][case.case_id] = assessment_periods
-                print(f"Case {case.case_id} marked as Good.")
-            elif option == "O":
-                assessment_periods_per_case["OK"][case.case_id] = assessment_periods
-                print(f"Case {case.case_id} marked as OK.")
-            else:
-                assessment_periods_per_case["Bad"][case.case_id] = assessment_periods
-                print(f"Case {case.case_id} marked as Bad.")
-            break
-        else:
-            duration_tol = float(input("duration_tol: "))
-            consecutive_breaths = int(input("consecutive_breaths: "))
-            niose_tol = int(input("niose_tol: "))
+clean_cases = assessment_periods_per_case["Good"]
+min_len0 = min([periods[0][1] - periods[0][0] for periods in clean_cases.values()])
+min_len1 = min([periods[1][1] - periods[1][0] for periods in clean_cases.values()])
+print(min_len0)
+print(min_len1)
 
-    assessment_periods_per_case[case.case_id] = assessment_periods
+# create training data using the clean cases
+X = []
+y = []
+for case_id, assessment_periods in clean_cases.items():
+    case = evlp_cases.get_case(case_id)
+    X.append(case.per_breath_param_table.get_params_in_range(assessment_periods[0][0], assessment_periods[0][0] + 30, params=["Dy_comp"]).to_numpy())
+    y.append(case.per_breath_param_table.get_params_in_range(assessment_periods[1][0], assessment_periods[1][0] + 30, params=["Dy_comp"]).to_numpy())
 
-with open("assessment_periods_per_case.pkl", "wb") as f:
-    pickle.dump(assessment_periods_per_case, f)
+X = np.array(X)
+y = np.array(y)
+print(X.shape)
+print(y.shape)
+
+# train with tsMixer
+from tsMixer import *
+
+# create training and validation datasets with leave-one-out
+maes = []
+# clean models folder to empty
+import shutil
+shutil.rmtree("./models")
+
+for i in range(X.shape[0]):
+    train_X = np.concatenate((X[:i], X[i+1:]), axis=0)
+    train_y = np.concatenate((y[:i], y[i+1:]), axis=0)
+    val_X = X[i:i+1]
+    val_y = y[i:i+1]
+
+    # build datasets with the first column as batch
+    train_dataset = tf.data.Dataset.from_tensor_slices((train_X, train_y)).batch(1)
+    val_dataset = tf.data.Dataset.from_tensor_slices((val_X, val_y)).batch(1)
+
+    model = build_model(
+        input_shape=train_X.shape[1:],
+        pred_len=30,
+        norm_type='B',
+        activation='relu',
+        n_block=5,
+        dropout=0,
+        ff_dim=30,
+        target_slice=None,
+    )
+
+    loss_fn = tf.keras.losses.MeanSquaredError()
+    optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+    epochs = 200
+    patience = 10
+    min_delta = 0.0001
+    model_dir = f'./models/case{i}'
+
+    # train
+    model = train_model(
+        model,
+        train_dataset,
+        val_dataset,
+        loss_fn,
+        optimizer,
+        epochs,
+        patience,
+        min_delta,
+        model_dir=model_dir
+    )
+
+    # evaluate
+    model.evaluate(val_dataset)
+
+    # evaluate with MAE
+    pred = model.predict(val_dataset)
+    maes.append(np.mean(np.abs(pred - val_y)))
+    print(maes[-1])
+
+    # plot
+    # plt.plot(pred[0], label="pred")
+    # plt.plot(val_y[0], label="true")
+    # plt.legend()
+    # plt.show()
+
+print(np.mean(maes))
+
+# remove outliers
+outlier_idx = np.where(np.array(maes) > np.std(maes) * 3 + np.mean(maes))[0]
+print(outlier_idx)
+maes = np.delete(maes, outlier_idx)
+print(np.mean(maes))
+
