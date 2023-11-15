@@ -106,12 +106,18 @@ print(min_len0)
 print(min_len1)
 
 # create training data using the clean cases
+cases_id = []
 X = []
 y = []
 for case_id, assessment_periods in clean_cases.items():
+    cases_id.append(case_id)
     case = evlp_cases.get_case(case_id)
-    X.append(case.per_breath_param_table.get_params_in_range(assessment_periods[0][0], assessment_periods[0][0] + 30, params=["Dy_comp"]).to_numpy())
-    y.append(case.per_breath_param_table.get_params_in_range(assessment_periods[1][0], assessment_periods[1][0] + 30, params=["Dy_comp"]).to_numpy())
+    assessment_1_start_breath_idx = assessment_periods[0][0]
+    assessment_2_start_breath_idx = assessment_periods[1][0]
+
+    X.append(case.per_breath_param_table.get_params_in_range(assessment_1_start_breath_idx - 20, assessment_1_start_breath_idx + 40, params=["Dy_comp"]).to_numpy())
+    # X.append(case.ventilator_per_breath_ts.get_breath_ts(assessment_1_start_breath_idx, assessment_1_start_breath_idx + 30).to_numpy())
+    y.append(case.per_breath_param_table.get_params_in_range(assessment_2_start_breath_idx, assessment_2_start_breath_idx + 30, params=["Dy_comp"]).to_numpy())
 
 X = np.array(X)
 y = np.array(y)
@@ -123,10 +129,16 @@ from tsMixer import *
 
 # create training and validation datasets with leave-one-out
 maes = []
+
 # clean models folder to empty
 import shutil
 shutil.rmtree("./models")
 
+# create models if not exist
+if not os.path.exists("./models"):
+    os.mkdir("./models")
+
+good_preds = []
 for i in range(X.shape[0]):
     train_X = np.concatenate((X[:i], X[i+1:]), axis=0)
     train_y = np.concatenate((y[:i], y[i+1:]), axis=0)
@@ -142,17 +154,17 @@ for i in range(X.shape[0]):
         pred_len=30,
         norm_type='B',
         activation='relu',
-        n_block=5,
+        n_block=6,
         dropout=0,
-        ff_dim=30,
+        ff_dim=13,
         target_slice=None,
     )
 
     loss_fn = tf.keras.losses.MeanSquaredError()
-    optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)
     epochs = 200
     patience = 10
-    min_delta = 0.0001
+    min_delta = 0.001
     model_dir = f'./models/case{i}'
 
     # train
@@ -176,17 +188,31 @@ for i in range(X.shape[0]):
     maes.append(np.mean(np.abs(pred - val_y)))
     print(maes[-1])
 
+    if maes[-1] < 10:
+        good_preds.append(pred)
+
     # plot
     # plt.plot(pred[0], label="pred")
     # plt.plot(val_y[0], label="true")
     # plt.legend()
     # plt.show()
 
+print(good_preds)
+
+print(maes)
 print(np.mean(maes))
 
+# plot maes on std of y
+stds = np.std(y, axis=1)
+plt.scatter(stds, maes)
+plt.xlabel("std of y")
+plt.ylabel("mae")
+plt.show()
+
 # remove outliers
-outlier_idx = np.where(np.array(maes) > np.std(maes) * 3 + np.mean(maes))[0]
+outlier_idx = np.where(np.array(maes) > np.std(maes) * 2 + np.mean(maes))[0]
 print(outlier_idx)
 maes = np.delete(maes, outlier_idx)
 print(np.mean(maes))
+
 
