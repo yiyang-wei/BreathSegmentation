@@ -170,10 +170,10 @@ class PerBreathParamTable:
         params["F_peak"] = np.max(whole_flow) / 100
         params["F_min"] = np.min(whole_flow) / 100
         params["F_mean"] = np.mean(whole_flow) / 100
-        params["Flow_index_mass_quantile_70"] = index_mass_quantile(whole_flow, [{'q': 0.7}])
-        params["Pressure_index_mass_quantile_70"] = index_mass_quantile(whole_pressure, [{'q': 0.7}])
-        params["Flow_energy_ratio_by_chunks_10_9"] = energy_ratio_by_chunks(whole_flow, [{'num_segments': 10, 'segment_focus': 9}])
-        params["Pressure_energy_ratio_by_chunks_10_9"] = energy_ratio_by_chunks(whole_pressure, [{'num_segments': 10, 'segment_focus': 9}])
+        # params["Flow_index_mass_quantile_70"] = index_mass_quantile(whole_flow, [{'q': 0.7}])
+        # params["Pressure_index_mass_quantile_70"] = index_mass_quantile(whole_pressure, [{'q': 0.7}])
+        # params["Flow_energy_ratio_by_chunks_10_9"] = energy_ratio_by_chunks(whole_flow, [{'num_segments': 10, 'segment_focus': 9}])
+        # params["Pressure_energy_ratio_by_chunks_10_9"] = energy_ratio_by_chunks(whole_pressure, [{'num_segments': 10, 'segment_focus': 9}])
         params["Flow_autocorrelation_3"] = autocorrelation(whole_flow, 3)
         params["Pressure_autocorrelation_3"] = autocorrelation(whole_pressure, 3)
         params["PEEP"] = whole_pressure[-1] / 100
@@ -316,6 +316,7 @@ class EVLPCases:
 
 if __name__ == "__main__":
     VENTILATOR_RAW_TS_FOLDER = r"C:\Users\weiyi\Workspace\UHN\ventilator data"
+    PARAM_TABLE_FOLDER = r"C:\Users\weiyi\Workspace\UHN\parameter table"
     DONOR_INFO_FILE_PATH = r"C:\Users\weiyi\Workspace\UHN\EVLP Data\EVLP#1-879_donor.csv"
     RECIPIENT_INFO_FILE_PATH = None
     TRANSPLANT_OUTCOME_FILE_PATH = r"C:\Users\weiyi\Workspace\UHN\EVLP Data\EVLP#1-879_disposition.csv"
@@ -325,7 +326,15 @@ if __name__ == "__main__":
                            DONOR_INFO_FILE_PATH, RECIPIENT_INFO_FILE_PATH,
                            TRANSPLANT_OUTCOME_FILE_PATH,
                            PROCESSED_CASE_SAVE_FOLDER,
-                           use_cases=[621, 817, 818])
+                           force_replace=True)
+
+    # # check if parameters table folder exists
+    # if not os.path.exists(PARAM_TABLE_FOLDER):
+    #     os.makedirs(PARAM_TABLE_FOLDER)
+    #
+    # for case in evlp_cases.cases.values():
+    #     # save the parameters table to a csv file
+    #     case.per_breath_param_table.param_table.to_csv(os.path.join(PARAM_TABLE_FOLDER, f"EVLP{case.case_id}.csv"))
 
     case = evlp_cases.get_case(818)
     case.print_case_info()
