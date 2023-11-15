@@ -1,5 +1,7 @@
+import matplotlib.pyplot as plt
+
 from BreathLoader import BreathLoader
-from tsfresh import extract_relevant_features
+from tsfresh import extract_relevant_features, extract_features
 from tsfresh.feature_selection import significance_tests
 from sklearn.linear_model import LassoCV, Lasso
 from sklearn.preprocessing import StandardScaler
@@ -226,6 +228,11 @@ def lasso_feature_selection(features, y):
     adj_r_square = adjust_r_square(r_square, n, p)
     return selected_features_1se, adj_r_square
 
+def ols_evaluation(features, y):
+    X = sm.add_constant(features)
+    model = sm.OLS(y, X).fit()
+    return model.rsquared_adj
+
 if __name__ == "__main__":
     # cases = [762, 782, 803, 817, 818]
     # id_to_filename = get_filenames_by_ids(cases)
@@ -236,29 +243,62 @@ if __name__ == "__main__":
              574, 575, 577, 579, 592, 593, 595, 598, 600, 603, 610, 615, 616,
              617, 618, 619, 631, 682, 685, 686, 694, 698, 730, 731, 736,
              738, 753, 762, 782, 803, 817, 818]
-    count_selected = {}
+
+    # selected_features = ["Flow__index_mass_quantile__q_0.7",
+    #                      "Pressure__index_mass_quantile__q_0.7",
+    #                      "Pressure__energy_ratio_by_chunks__num_segments_10__segment_focus_9",
+    #                      "Flow__energy_ratio_by_chunks__num_segments_10__segment_focus_6",
+    #                      "Flow__autocorrelation__lag_3",
+    #                      "Pressure__minimum",
+    #                      "Flow__mean"]
+
+    selected_features = {
+        "index_mass_quantile": [{'q': 0.7}],
+        "energy_ratio_by_chunks": [{'num_segments': 10, 'segment_focus': 9}],
+        "energy_ratio_by_chunks": [{'num_segments': 10, 'segment_focus': 6}],
+        "autocorrelation": [{'lag': 3}],
+        "minimum": None,
+        "mean": None
+    }
+
+    adj_r_squares = []
+
     for c in cases:
+        # read features and y from file
         id_to_filename = get_filenames_by_ids([c])
-        r_square, selected = process_selected_cases(id_to_filename)
+        X, y = load_and_prepare_data(id_to_filename)
+        features = extract_features(X, column_id='Id', column_sort='Timestamp', n_jobs=8, default_fc_parameters=selected_features)
+        adj_r_square = ols_evaluation(features, y)
+        adj_r_squares.append(adj_r_square)
+        print("Adjusted R Square:", adj_r_square)
 
-        for feature in selected:
-            if feature not in count_selected:
-                count_selected[feature] = 0
-            count_selected[feature] += 1
+    plt.hist(adj_r_squares, bins=20)
+    plt.show()
 
-    print()
-    print("Selected Features Frequency:")
-    # print count_selected in descending order
-    count = 20
-    for feature, count in sorted(count_selected.items(), key=lambda x: x[1], reverse=True):
-        print(f"{feature}: {count}")
-        count -= 1
-        if count == 0:
-            break
-    print()
-    # save to csv
-    frequency = pd.Series(count_selected)
-    save_to_csv(frequency, "frequency.csv")
+
+    # count_selected = {}
+    # for c in cases:
+    #     id_to_filename = get_filenames_by_ids([c])
+    #     r_square, selected = process_selected_cases(id_to_filename)
+    #
+    #     for feature in selected:
+    #         if feature not in count_selected:
+    #             count_selected[feature] = 0
+    #         count_selected[feature] += 1
+    #
+    # print()
+    # print("Selected Features Frequency:")
+    # # print count_selected in descending order
+    # count = 20
+    # for feature, count in sorted(count_selected.items(), key=lambda x: x[1], reverse=True):
+    #     print(f"{feature}: {count}")
+    #     count -= 1
+    #     if count == 0:
+    #         break
+    # print()
+    # # save to csv
+    # frequency = pd.Series(count_selected)
+    # save_to_csv(frequency, "frequency.csv")
 
 
 """EVLP551
