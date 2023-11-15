@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from tsfresh.feature_extraction.feature_calculators import index_mass_quantile, energy_ratio_by_chunks, autocorrelation
 import os
 import re
 import pickle
@@ -152,6 +153,7 @@ class PerBreathParamTable:
         whole_pressure = self.raw_ts.raw_df["Pressure"][start_idx:end_idx].to_numpy()
         in_flow = self.raw_ts.raw_df["Flow"][start_idx:mid_idx].to_numpy()
         ex_flow = self.raw_ts.raw_df["Flow"][mid_idx:end_idx].to_numpy()
+        whole_flow = self.raw_ts.raw_df["Flow"][start_idx:end_idx].to_numpy()
 
         params = {}
         params["Max_gap(ms)"] = np.max(np.diff(whole_timestamp))
@@ -163,8 +165,17 @@ class PerBreathParamTable:
         params["Ex_duration(s)"] = (end_timestamp - mid_timestamp) / 10000
         params["IE_duration_ratio"] = params["In_duration(s)"] / params["Ex_duration(s)"]
         params["P_peak"] = np.max(whole_pressure) / 100
-        params["P_bottom"] = np.min(whole_pressure) / 100
-        params["F_min"] = min(np.min(in_flow), np.min(ex_flow)) / 100
+        params["P_min"] = np.min(whole_pressure) / 100
+        params["P_mean"] = np.mean(whole_pressure) / 100
+        params["F_peak"] = np.max(whole_flow) / 100
+        params["F_min"] = np.min(whole_flow) / 100
+        params["F_mean"] = np.mean(whole_flow) / 100
+        params["Flow_index_mass_quantile_70"] = index_mass_quantile(whole_flow, [{'q': 0.7}])
+        params["Pressure_index_mass_quantile_70"] = index_mass_quantile(whole_pressure, [{'q': 0.7}])
+        params["Flow_energy_ratio_by_chunks_10_9"] = energy_ratio_by_chunks(whole_flow, [{'num_segments': 10, 'segment_focus': 9}])
+        params["Pressure_energy_ratio_by_chunks_10_9"] = energy_ratio_by_chunks(whole_pressure, [{'num_segments': 10, 'segment_focus': 9}])
+        params["Flow_autocorrelation_3"] = autocorrelation(whole_flow, 3)
+        params["Pressure_autocorrelation_3"] = autocorrelation(whole_pressure, 3)
         params["PEEP"] = whole_pressure[-1] / 100
         params["Dy_comp"] = - params["Ex_vol(ml)"] / (params["P_peak"] - 5)
         return params
@@ -319,8 +330,7 @@ if __name__ == "__main__":
     case = evlp_cases.get_case(818)
     case.print_case_info()
 
-    print(*case.ventilator_per_breath_ts.get_segments_ts(1), sep="\n")
-    print(*case.ventilator_per_breath_ts.get_segments_ts(2), sep="\n")
+    print(case.per_breath_param_table.get_params(1))
 
     case.ventilator_raw_ts.plot()
     case.per_breath_param_table.plot()
