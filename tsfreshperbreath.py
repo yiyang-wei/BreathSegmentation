@@ -252,10 +252,9 @@ if __name__ == "__main__":
     #                      "Pressure__minimum",
     #                      "Flow__mean"]
 
-    selected_features = {
+    feature_parameters = {
         "index_mass_quantile": [{'q': 0.7}],
-        "energy_ratio_by_chunks": [{'num_segments': 10, 'segment_focus': 9}],
-        "energy_ratio_by_chunks": [{'num_segments': 10, 'segment_focus': 6}],
+        "energy_ratio_by_chunks": [{'num_segments': 10, 'segment_focus': 9}, {'num_segments': 10, 'segment_focus': 6}],
         "autocorrelation": [{'lag': 3}],
         "minimum": None,
         "mean": None
@@ -267,7 +266,7 @@ if __name__ == "__main__":
         # read features and y from file
         id_to_filename = get_filenames_by_ids([c])
         X, y = load_and_prepare_data(id_to_filename)
-        features = extract_features(X, column_id='Id', column_sort='Timestamp', n_jobs=8, default_fc_parameters=selected_features)
+        features = extract_features(X, column_id='Id', column_sort='Timestamp', n_jobs=8, default_fc_parameters=feature_parameters)
         adj_r_square = ols_evaluation(features, y)
         adj_r_squares.append(adj_r_square)
         print("Adjusted R Square:", adj_r_square)
