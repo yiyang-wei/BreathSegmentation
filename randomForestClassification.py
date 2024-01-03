@@ -13,14 +13,14 @@ files = ["data/20220418_EVLP818_converted.csv",
          "data/20220218_EVLP803_converted.csv",
          "data/20210925_EVLP782_converted.csv",
          "data/20210620_EVLP762_converted.csv",
-         "data/20210521_EVLP753_converted.csv"][:4]
+         "data/20210521_EVLP753_converted.csv"]
 
 # 550, 552, 556, 606, 681 are single
 # 599, 701, 737 double to single
 # 556, 696 auto triggering
 
 
-WINDOW_SIZE = 401
+WINDOW_SIZE = 601
 
 def train(X_train, y_train, X_test, y_test):
 

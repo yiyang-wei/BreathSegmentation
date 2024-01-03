@@ -315,17 +315,18 @@ class EVLPCases:
 
 
 if __name__ == "__main__":
-    VENTILATOR_RAW_TS_FOLDER = r"C:\Users\weiyi\Workspace\UHN\ventilator data"
-    PARAM_TABLE_FOLDER = r"C:\Users\weiyi\Workspace\UHN\parameter table"
-    DONOR_INFO_FILE_PATH = r"C:\Users\weiyi\Workspace\UHN\EVLP Data\EVLP#1-879_donor.csv"
+    DATA_FOLDER = r"..\EVLP Data"
+    VENTILATOR_RAW_TS_FOLDER = os.path.join(r"raw ventilator ts")
+    PARAM_TABLE_FOLDER = os.path.join(r"parameter table")
+    DONOR_INFO_FILE_PATH = os.path.join(r"EVLP#1-879_donor.csv")
     RECIPIENT_INFO_FILE_PATH = None
-    TRANSPLANT_OUTCOME_FILE_PATH = r"C:\Users\weiyi\Workspace\UHN\EVLP Data\EVLP#1-879_disposition.csv"
-    PROCESSED_CASE_SAVE_FOLDER = r"C:\Users\weiyi\Workspace\UHN\processed evlp cases"
+    TRANSPLANT_OUTCOME_FILE_PATH = os.path.join(r"EVLP#1-879_disposition.csv")
+    EVLPCASE_OBJECTS_SAVE_FOLDER = os.path.join(r"EVLP case objects")
 
     evlp_cases = EVLPCases(VENTILATOR_RAW_TS_FOLDER,
                            DONOR_INFO_FILE_PATH, RECIPIENT_INFO_FILE_PATH,
                            TRANSPLANT_OUTCOME_FILE_PATH,
-                           PROCESSED_CASE_SAVE_FOLDER,
+                           EVLPCASE_OBJECTS_SAVE_FOLDER,
                            force_replace=True)
 
     # # check if parameters table folder exists
@@ -339,7 +340,3 @@ if __name__ == "__main__":
     case = evlp_cases.get_case(818)
     case.print_case_info()
 
-    print(case.per_breath_param_table.get_params(1))
-
-    case.ventilator_raw_ts.plot()
-    case.per_breath_param_table.plot()

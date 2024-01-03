@@ -25,9 +25,9 @@ def fixed_window(flow, phase, clip=1000, window_size=601):
     X = np.zeros((L - window_size, window_size))
     y = np.zeros((L - window_size, 1))
 
-    for i in range(L - window_size):
+    for i in range(X.shape[0]):
         X[i] = flow[i:i + window_size]
-        y[i] = phase[i + window_size // 2]
+        y[i] = phase[i + window_size // 3]
 
     return X, y
 
