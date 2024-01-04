@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 import os
 
 
-FLOW_THRESHOLD = 600
+CLIP = 800
 
 
-def segment_breath(flow):
+def segment_breath_A(flow, flow_threshold_0=0, flow_threshold_1=600, ):
     left = 1
     right = left + 1
     B_phase = np.zeros(flow.shape[0])
@@ -17,17 +17,17 @@ def segment_breath(flow):
     while right < flow.shape[0] - 1:
         if flow[right] >= flow[right-1] and decreasing:
             decreasing = False
-            if flow[right] < 0 and phase == 1:
+            if flow[right] < flow_threshold_0 and phase == 1:
                 phase = 0
-            B_phase[left+1:right+1] = phase
+            B_phase[left+1:right] = phase
             left = right
             right = left + 1
             increasing = True
         elif flow[right] <= flow[right-1] and increasing:
             increasing = False
-            if flow[right] > FLOW_THRESHOLD and phase == 0:
+            if flow[right] > flow_threshold_1 and phase == 0:
                 phase = 1
-            B_phase[left+1:right+1] = phase
+            B_phase[left:right+1] = phase
             left = right
             right = left + 1
             decreasing = True
@@ -45,20 +45,38 @@ def segment_breath(flow):
     return B_phase
 
 
+def segment_breath_B(flow, threshold01=250, threshold10=250, slope_threshold=80):
+    B_phase = np.zeros(flow.shape[0])
+    phase = 0
+    idx = 1
+    while idx < flow.shape[0] - 10:
+        if ((flow[idx] < threshold01 <= flow[idx+1] or flow[idx+1] - flow[idx] > slope_threshold) and flow[idx+10] > 500) or flow[idx] > 500:
+            phase = 1
+        elif ((flow[idx-1] > threshold10 >= flow[idx] or flow[idx] - flow[idx-1] < -slope_threshold) and flow[idx+10] < 0) or flow[idx] < 0:
+            phase = 0
+        B_phase[idx] = phase
+        idx += 1
+    return B_phase
 
 
-raw_ventilator_folder = r"..\ventilator converted files"
+raw_ventilator_folder = r"..\EVLP data\raw ventilator ts"
+bellavista_folder = r"..\EVLP data\Bellavista data"
+use_folder = raw_ventilator_folder
 
-files = [file for file in os.listdir(raw_ventilator_folder) if file.endswith(".csv")]
+
+files = [file for file in os.listdir(use_folder) if file.endswith(".csv")]
 
 use_files = files[:]
 
 accuracies = []
 for file in use_files:
-    df = pd.read_csv(os.path.join(raw_ventilator_folder, file), header=0)
+    df = pd.read_csv(os.path.join(use_folder, file), header=0)
     flow = df["Flow"].to_numpy()
-    pred_B_phase = segment_breath(flow)
+    pred_B_phase = segment_breath_B(flow)
+    flow = flow[CLIP:-CLIP]
     B_phase = df["B_phase"].to_numpy()
+    B_phase = B_phase[CLIP:-CLIP]
+    pred_B_phase = pred_B_phase[CLIP:-CLIP]
     # evaluate accuracy
     diff = pred_B_phase - B_phase
     diff[diff != 0] = 1
@@ -66,13 +84,26 @@ for file in use_files:
     accuracies.append(accuracy)
     print(f"Accuracy of {file}: {accuracy}")
     # for i in range(6000*0, flow.shape[0], 6000):
+    #     err = B_phase[i:i+6000] - pred_B_phase[i:i+6000]
+    #     mistakes = np.where(err != 0)[0]
+    #     j = 0
+    #     while j < mistakes.shape[0]:
+    #         start = mistakes[j]
+    #         while j < mistakes.shape[0] - 1 and mistakes[j + 1] == mistakes[j] + 1:
+    #             j += 1
+    #         end = mistakes[j]
+    #         print(np.vstack((flow[i + start - 3:i + end + 3],
+    #                          err[start - 3:end + 3].astype(int),
+    #                          B_phase[i + start - 3:i + end + 3].astype(int),
+    #                          pred_B_phase[i + start - 3:i + end + 3].astype(int))))
+    #         j += 1
+    #     print()
     #     plt.subplot(3, 1, 1)
-    #     plt.plot(flow[i:i+6000], label="flow")
+    #     plt.plot(flow[i:i+6000])
     #     plt.subplot(3, 1, 2)
-    #     plt.plot(B_phase[i:i+6000], label="B_phase")
+    #     plt.plot(pred_B_phase[i:i+6000])
     #     plt.subplot(3, 1, 3)
-    #     plt.plot(pred_B_phase[i:i+6000], label="pred_B_phase")
-    #     plt.legend()
+    #     plt.plot(err, color="red")
     #     plt.show()
 
 print(f"Average accuracy: {np.mean(accuracies)}")
