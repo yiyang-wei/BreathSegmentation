@@ -45,12 +45,12 @@ def segment_breath_A(flow, flow_threshold_0=0, flow_threshold_1=600, ):
     return B_phase
 
 
-def segment_breath_B(flow, threshold01=250, threshold10=250, slope_threshold01=50, slope_threshold10=50, forward=4, flow_threshold01=450, flow_threshold10=0):
+def segment_breath_B(flow, threshold01=250, threshold10=250, slope_threshold01=80, slope_threshold10=30, forward=3, flow_threshold01=375, flow_threshold10=0, flow_hard_threshold01=500):
     B_phase = np.zeros(flow.shape[0])
     phase = 0
     idx = 1
     while idx < flow.shape[0] - 10:
-        if ((flow[idx] < threshold01 <= flow[idx+1] or flow[idx+1] - flow[idx] > slope_threshold01) and flow[idx+forward] > flow_threshold01) or flow[idx] > flow_threshold01:
+        if ((flow[idx] < threshold01 <= flow[idx+1] or flow[idx+1] - flow[idx] > slope_threshold01) and flow[idx+forward] > flow_threshold01) or flow[idx] > flow_hard_threshold01:
             phase = 1
         elif ((flow[idx-1] > threshold10 >= flow[idx] or flow[idx] - flow[idx-1] < -slope_threshold10) and flow[idx+forward] < flow_threshold10) or flow[idx] < flow_threshold10:
             phase = 0
@@ -146,5 +146,5 @@ def segment_bellavista():
             plt.show()
 
 
-segment_servo_i(log=True, plot=True)
+segment_servo_i(log=True, plot=False)
 # segment_bellavista()
