@@ -2,9 +2,20 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import os
+import re
 
 
 CLIP = 800
+
+
+def read_cases(folder):
+    cases = {}
+    for file_name in os.listdir(folder):
+        if file_name.endswith(".csv"):
+            case_id = int(re.search(r"EVLP\d+", file_name).group()[4:])
+            df = pd.read_csv(os.path.join(folder, file_name), header=0)
+            cases[case_id] = df
+    return cases
 
 
 def segment_breath_A(flow, flow_threshold_0=0, flow_threshold_1=600, ):
@@ -72,16 +83,27 @@ def segment_breath_C(flow, threshold01=5, threshold10=5, slope_threshold01=1, sl
         idx += 1
     return B_phase
 
+def segment_breath_D(volume, ):
+    B_phase = np.zeros(volume.shape[0])
+    phase = 0
+    idx = 1
+    while idx < volume.shape[0] - 10:
+        if volume[idx] > volume[idx-1]:
+            phase = 1
+        elif volume[idx] < volume[idx-1]:
+            phase = 0
+        B_phase[idx] = phase
+        idx += 1
+
 
 def segment_servo_i(log=True, plot=False, kwargs=None):
     if kwargs is not None:
         print(kwargs)
-    raw_ventilator_folder = r"..\ventilator converted files"
-    files = [file for file in os.listdir(raw_ventilator_folder) if file.endswith(".csv")]
-    use_files = files[-1:]
+    raw_ventilator_folder = r"..\EVLP data\raw ventilator ts"
+    cases = read_cases(raw_ventilator_folder)
     accuracies = []
-    for file in use_files:
-        df = pd.read_csv(os.path.join(raw_ventilator_folder, file), header=0)
+    for case in cases:
+        df = cases[case]
         flow = df["Flow"].to_numpy()
         if kwargs is None:
             pred_B_phase = segment_breath_B(flow)
@@ -97,7 +119,7 @@ def segment_servo_i(log=True, plot=False, kwargs=None):
         accuracy = 1 - np.sum(diff) / diff.shape[0]
         accuracies.append(accuracy)
         if log:
-            print(f"Accuracy of {file}: {accuracy}")
+            print(f"Accuracy of EVLP{case}: {accuracy}")
         if plot:
             window_size = 6000
             for i in range(window_size*38, flow.shape[0], window_size):
@@ -130,7 +152,7 @@ def segment_servo_i(log=True, plot=False, kwargs=None):
     print("Worst 3 accuracies:")
     worst_3 = np.argsort(accuracies)[:3]
     for i in worst_3:
-        print(f"{use_files[i]}: {accuracies[i]}")
+        print(f"EVLP{list(cases.keys())[i]}: {accuracies[i]}")
 
 
 def segment_bellavista():
