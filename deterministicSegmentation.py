@@ -45,7 +45,7 @@ def segment_breath_A(flow, flow_threshold_0=0, flow_threshold_1=600, ):
     return B_phase
 
 
-def segment_breath_B(flow, threshold01=250, threshold10=250, slope_threshold01=80, slope_threshold10=30, forward=3, flow_threshold01=375, flow_threshold10=0, flow_hard_threshold01=500):
+def segment_breath_B(flow, threshold01=250, threshold10=250, slope_threshold01=80, slope_threshold10=80, forward=3, flow_threshold01=375, flow_threshold10=0, flow_hard_threshold01=520):
     B_phase = np.zeros(flow.shape[0])
     phase = 0
     idx = 1
@@ -73,15 +73,20 @@ def segment_breath_C(flow, threshold01=5, threshold10=5, slope_threshold01=1, sl
     return B_phase
 
 
-def segment_servo_i(log=True, plot=False):
-    raw_ventilator_folder = r"..\EVLP data\raw ventilator ts"
+def segment_servo_i(log=True, plot=False, kwargs=None):
+    if kwargs is not None:
+        print(kwargs)
+    raw_ventilator_folder = r"..\ventilator converted files"
     files = [file for file in os.listdir(raw_ventilator_folder) if file.endswith(".csv")]
-    use_files = files[:]
+    use_files = files[-1:]
     accuracies = []
     for file in use_files:
         df = pd.read_csv(os.path.join(raw_ventilator_folder, file), header=0)
         flow = df["Flow"].to_numpy()
-        pred_B_phase = segment_breath_B(flow)
+        if kwargs is None:
+            pred_B_phase = segment_breath_B(flow)
+        else:
+            pred_B_phase = segment_breath_B(flow, **kwargs)
         flow = flow[CLIP:-CLIP]
         B_phase = df["B_phase"].to_numpy()
         B_phase = B_phase[CLIP:-CLIP]
@@ -106,7 +111,7 @@ def segment_servo_i(log=True, plot=False):
                     while j < mistakes.shape[0] - 1 and mistakes[j + 1] == mistakes[j] + 1:
                         j += 1
                     end = mistakes[j]
-                    padding = 5
+                    padding = 1
                     print(np.vstack((flow[i + start - padding:i + end + padding + 1],
                                      err[start - padding:end + padding + 1].astype(int),
                                      B_phase[i + start - padding:i + end + padding + 1].astype(int),
@@ -122,6 +127,10 @@ def segment_servo_i(log=True, plot=False):
                 plt.show()
 
     print(f"Average accuracy: {np.mean(accuracies)}")
+    print("Worst 3 accuracies:")
+    worst_3 = np.argsort(accuracies)[:3]
+    for i in worst_3:
+        print(f"{use_files[i]}: {accuracies[i]}")
 
 
 def segment_bellavista():

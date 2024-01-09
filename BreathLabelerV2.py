@@ -69,7 +69,7 @@ SAVE_FOLDER = r"C:\Users\yiyan\Workspace\UHN\ventilator breath labels"
 
 # specifc file or entire folder
 ENTIRE_FOLDER = False
-IN_FILE_NAME = "20190707_EVLP556_converted.csv"
+IN_FILE_NAME = "20190629_EVLP553_converted.csv"
 OUT_FILE_NAME = IN_FILE_NAME[:-13] + "labeled.csv"
 
 # window size

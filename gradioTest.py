@@ -16,8 +16,8 @@ def generate_data(length):
         columns=['A', 'B', 'C'], index=pd.RangeIndex(length, name='x')
     )
     df = df.reset_index().melt('x', var_name='category', value_name='y')
-    df.to_parquet('data.parquet')
-    return 'data.parquet'
+    # df.to_parquet('data.parquet', format='vega')
+    return df
 
 
 def create_interactive_multiline_charts(length):
@@ -25,8 +25,9 @@ def create_interactive_multiline_charts(length):
     length = int(length)
 
     # Generate random data
-    url = generate_data(length)
-    source = alt.pd.read_parquet(url)
+    # url = generate_data(length)
+    # source = alt.pd.read_parquet(url)
+    source = generate_data(length)
 
     # Create the nearest point selection
     nearest = alt.selection_point(nearest=True, on='mouseover',
