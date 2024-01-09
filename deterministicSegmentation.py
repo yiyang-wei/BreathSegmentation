@@ -1,8 +1,12 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import pickle
 import os
 import re
+
+from sklearn.model_selection import ParameterGrid
+import multiprocessing as mp
 
 
 CLIP = 800
@@ -16,7 +20,6 @@ def read_cases(folder):
             df = pd.read_csv(os.path.join(folder, file_name), header=0)
             cases[case_id] = df
     return cases
-
 
 def segment_breath_A(flow, flow_threshold_0=0, flow_threshold_1=600, ):
     left = 1
@@ -96,11 +99,9 @@ def segment_breath_D(volume, ):
         idx += 1
 
 
-def segment_servo_i(log=True, plot=False, kwargs=None):
+def segment_servo_i(cases, log=True, plot=False, kwargs=None):
     if kwargs is not None:
         print(kwargs)
-    raw_ventilator_folder = r"..\EVLP data\raw ventilator ts"
-    cases = read_cases(raw_ventilator_folder)
     accuracies = []
     for case in cases:
         df = cases[case]
@@ -147,12 +148,19 @@ def segment_servo_i(log=True, plot=False, kwargs=None):
                 plt.subplot(3, 1, 3)
                 plt.plot(err, color="red")
                 plt.show()
+        if len(accuracies) % 10 == 0:
+            if np.mean(accuracies) < 0.996:
+                print(f"{kwargs} Low accuracy, aborting...")
+                break
+    else:
+        print(kwargs)
+        print(f"Average accuracy: {np.mean(accuracies)}")
+        print("Worst 3 accuracies:")
+        worst_3 = np.argsort(accuracies)[:3]
+        for i in worst_3:
+            print(f"EVLP{list(cases.keys())[i]}: {accuracies[i]}")
 
-    print(f"Average accuracy: {np.mean(accuracies)}")
-    print("Worst 3 accuracies:")
-    worst_3 = np.argsort(accuracies)[:3]
-    for i in worst_3:
-        print(f"EVLP{list(cases.keys())[i]}: {accuracies[i]}")
+    return kwargs, accuracies
 
 
 def segment_bellavista():
@@ -177,5 +185,33 @@ def segment_bellavista():
             plt.show()
 
 
-segment_servo_i(log=True, plot=False)
-# segment_bellavista()
+
+if __name__ == "__main__":
+    param_grid = ParameterGrid({"threshold01": [200, 250, 300, 350],
+                                "slope_threshold01": [20, 40, 60, 80],
+                                "forward": [2, 3, 4],
+                                "flow_threshold01": [350, 375, 400, 425],
+                                "flow_hard_threshold01": [450, 500, 520, 550]})
+
+    cases = read_cases(r"..\ventilator converted files")
+
+    with mp.Pool(processes=4) as pool:
+        results = pool.starmap(segment_servo_i, [(cases, False, False, kwargs) for kwargs in param_grid])
+
+    grid_search = {}
+    for result in results:
+        grid_search[tuple(result[0])] = result[1]
+
+    with open("grid_search.pkl", "wb") as f:
+        pickle.dump(grid_search, f)
+
+
+    # with open("grid_search.pkl", "rb") as f:
+    #     grid_search = pickle.load(f)
+
+    # print top 5 mean accuracy settings and their accuracies
+    mean_accuracies = [(key, np.mean(value)) for key, value in grid_search.items()]
+    mean_accuracies.sort(key=lambda x: x[1], reverse=True)
+    print(mean_accuracies[:5])
+
+    # segment_bellavista()
