@@ -21,7 +21,7 @@ def read_cases(folder):
             cases[case_id] = df
     return cases
 
-def segment_breath_A(flow, flow_threshold_0=0, flow_threshold_1=600, ):
+def segment_breath_A(flow, flow_threshold_0=0, flow_threshold_1=600):
     left = 1
     right = left + 1
     B_phase = np.zeros(flow.shape[0])
