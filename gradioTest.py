@@ -30,7 +30,6 @@ def get_data(start, length):
 def create_interactive_multiline_charts(start, length):
     df_scaled = get_data(start, length)
 
-    highlight = alt.selection_point(on='mouseover', fields=['symbol'], nearest=True)
     nearest = alt.selection_point(nearest=True, on='mouseover', fields=['x'], empty=False)
     interval = alt.selection_interval(encodings=['x'])
 
